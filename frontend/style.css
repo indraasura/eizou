@@ -211,3 +211,65 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* --- Markdown & Table Styling --- */
+.bubble p {
+    margin-bottom: 12px;
+}
+
+.bubble p:last-child {
+    margin-bottom: 0;
+}
+
+.bubble ul,
+.bubble ol {
+    margin-left: 20px;
+    margin-bottom: 12px;
+}
+
+.bubble table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: block;
+    /* Allows scrolling on small screens */
+}
+
+.bubble th,
+.bubble td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.bubble th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.bubble tr:last-child td {
+    border-bottom: none;
+}
+
+/* --- Chart Styling --- */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+    max-width: 600px;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    padding: 16px;
+    background-color: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}

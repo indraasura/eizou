@@ -61,6 +61,7 @@ def read_ppt(file_bytes):
         for shape in slide.shapes:
             if hasattr(shape, "text"):
                 text_runs.append(shape.text)
+    print(text_runs)
     return "\n".join(text_runs)
 
 @app.post("/upload")
@@ -135,11 +136,15 @@ async def chat(message: str = Form(...), model: str = Form(...)):
             
         system_prompt = (
             "You are a meticulous enterprise data assistant. Use the provided context to answer the user's question. "
-            "CRITICAL INSTRUCTION: When the user asks you to 'list', 'group', or 'show all' items, you MUST output the COMPLETE and exhaustive list from the context. "
-            "Do NOT summarize, do NOT truncate, and do NOT say 'here are a few examples'. Extract and provide every single matching item. "
+            "CRITICAL INSTRUCTIONS:\n"
+            "1. TABLES: When asked to list, group, or show all items, output a COMPLETE and exhaustive Markdown table. Do not truncate or summarize.\n"
+            "2. CHARTS: If the user explicitly asks for a chart or graph, output a valid JSON object wrapped EXACTLY in a ```chart ... ``` code block. "
+            "The JSON must be a valid Chart.js configuration object containing 'type' (e.g., 'bar', 'pie', 'line', 'doughnut'), 'data' (labels and datasets), and 'options'. "
+            "Keep the chart design modern, minimal, and use aesthetic colors.\n"
             "If you don't know the answer based on the context, say you don't know.\n\n"
             "Context: {context}"
         )
+
         prompt_template = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("human", "{input}"),
