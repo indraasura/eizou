@@ -246,7 +246,7 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
     openai_key = os.getenv("OPENAI_API_KEY")
     db_key = "gemini" if "gemini" in model.lower() else "openai"
     
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=google_key, transport="rest") if db_key == "gemini" else OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_key)
+    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", google_api_key=google_key, transport="rest") if db_key == "gemini" else OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_key)
         
     vector_store = FAISS.from_documents(chunks, embeddings)
     save_path = str(STORAGE_DIR / f"project_{project_id}_{db_key}")
