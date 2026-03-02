@@ -1,2 +1,8 @@
+# Ignore local database and vector storage
+storage/
+nexus.db
+*.db
+*.faiss
+*.pkl
 .env
 venv

@@ -12,3 +12,4 @@ pandas
 tabulate
 python-pptx
 openpyxl
+supabase

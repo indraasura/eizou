@@ -4,54 +4,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus - Enterprise Data Agent</title>
+    <title>Enterprise Data Platform</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
-    <div class="app-container">
+
+    <div id="view-login" class="view active">
+        <div class="login-container">
+            <h2>Sign In</h2>
+            <input type="text" id="email" placeholder="Email Address">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="login()">Continue</button>
+            <div id="login-error" style="color: #D93025; margin-top: 16px; font-size: 0.9rem;"></div>
+        </div>
+    </div>
+
+    <div id="view-app" class="view">
+
         <aside class="sidebar">
-            <div class="logo">Nexus</div>
-            <div class="upload-section">
-                <h3>Knowledge Base</h3>
-                <input type="file" id="file-upload" multiple accept=".xlsx,.xls,.ppt,.pptx" style="display: none;">
-                <button class="btn secondary" onclick="document.getElementById('file-upload').click()">+ Select
-                    Files</button>
-                <div id="file-list" class="file-list"></div>
-                <button class="btn primary" id="sync-btn" onclick="syncData()">Sync Data to AI</button>
-                <div id="sync-status" class="status-msg"></div>
-            </div>
+            <h2 style="padding: 12px 20px; margin-bottom: 12px; font-weight: 500;">Eizou Platform</h2>
+            <nav id="nav-menu" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="nav-item active" onclick="switchTab('chat')">
+                    💬 Data Analysis
+                </div>
+                <div class="nav-item admin-only" onclick="switchTab('admin')" style="display:none;">
+                    ⚙️ Administration
+                </div>
+                <div class="nav-item" onclick="logout()" style="margin-top: auto;">
+                    🚪 Sign Out
+                </div>
+            </nav>
         </aside>
 
-        <main class="chat-wrapper">
-            <div id="chat-container" class="chat-container">
-                <div class="message ai">
-                    <div class="bubble">👋 Hello, I'm Nexus. Upload your files in the sidebar and click Sync to begin chatting with your data</div>
+        <main class="main-content">
+            <div class="header">
+                <select id="project-selector" class="project-selector" onchange="clearChat()"></select>
+                <div style="color: var(--text-secondary); font-weight: 500;" id="user-badge"></div>
+            </div>
+
+            <div id="tab-chat" class="tab-content" style="display: flex; flex-direction: column; flex: 1;">
+                <div id="chat-container" class="chat-container">
+                    <div class="message ai">
+                        <div class="bubble">Select a project from the top menu to begin analyzing data.</div>
+                    </div>
+                </div>
+                <div class="input-wrapper">
+                    <div class="input-box">
+                        <select id="model-select"
+                            style="border:none; outline:none; background:transparent; margin-right: 16px; font-weight: 500; color: var(--text-secondary); cursor: pointer;">
+                            <option value="openai">🌐 GPT-4o</option>
+                            <option value="gemini">✨ Gemini</option>
+                        </select>
+                        <input type="text" id="user-input" placeholder="Ask a question about the project data..."
+                            onkeypress="if(event.key === 'Enter') sendChat()">
+                        <button class="send-btn" onclick="sendChat()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="input-wrapper">
-                <div class="input-box">
-                    <select id="model-select" class="model-dropdown">
-                        <option value="gemini">✨ Gemini (Test)</option>
-                        <option value="openai">🌐 GPT-4o (Prod)</option>
-                    </select>
-                    <input type="text" id="user-input" placeholder="Ask about your data..."
-                        onkeypress="handleKeyPress(event)">
-                    <button id="send-btn" onclick="sendMessage()">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
-                    </button>
+            <div id="tab-admin" class="tab-content admin-panel" style="display: none;">
+                <h1>Platform Administration</h1>
+
+                <div class="card">
+                    <h2>1. Create New Project</h2>
+                    <div class="form-group">
+                        <input type="text" id="new-project-name" placeholder="Enter Project Name">
+                        <button class="btn-pill" onclick="createProject()">Create Project</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>2. Provision User Account</h2>
+                    <div class="form-group">
+                        <input type="email" id="new-email" placeholder="Email Address">
+                        <input type="password" id="new-password" placeholder="Password (Min 6 chars)">
+                        <select id="new-role" style="max-width: 150px;">
+                            <option value="user">Standard User</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                        <button class="btn-pill" onclick="createUser()">Provision</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>3. Manage Access Controls</h2>
+                    <div class="form-group">
+                        <input type="email" id="assign-email" placeholder="User Email">
+                        <select id="assign-project-id" style="max-width: 250px;"></select>
+                        <button class="btn-pill" onclick="assignUser()">Grant Access</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>4. Upload Knowledge Base</h2>
+                    <div class="form-group">
+                        <select id="upload-project-id" style="max-width: 250px;"></select>
+                        <select id="upload-model" style="max-width: 150px;">
+                            <option value="openai">🌐 OpenAI</option>
+                            <option value="gemini">✨ Gemini</option>
+                        </select>
+                        <input type="file" id="file-upload" multiple accept=".xlsx,.csv,.ppt,.pptx"
+                            style="background: var(--bg-main);">
+                        <button class="btn-pill" onclick="uploadData()" id="upload-btn">Sync to Vector DB</button>
+                    </div>
+                    <div id="upload-status" style="margin-top: 12px; font-weight: 500; color: var(--text-secondary);">
+                    </div>
                 </div>
             </div>
         </main>
     </div>
+
     <script src="script.js"></script>
 </body>
 

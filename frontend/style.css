@@ -1,124 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&display=swap');
+
 :root {
-    --bg-color: #ffffff;
-    --sidebar-bg: #f9f9fb;
-    --text-main: #111827;
-    --text-muted: #6b7280;
-    --border: #e5e7eb;
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --user-bubble: #f3f4f6;
-    --font-family: 'Inter', sans-serif;
+    --bg-main: #FFFFFF;
+    --bg-surface: #F0F4F9;
+    --text-primary: #1F1F1F;
+    --text-secondary: #444746;
+    --accent: #0A56D0;
+    --accent-hover: #0842A0;
+    --border: #E3E3E3;
+    --radius-pill: 50px;
+    --radius-card: 24px;
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 body {
-    font-family: var(--font-family);
-    background-color: var(--bg-color);
-    color: var(--text-main);
+    background-color: var(--bg-main);
+    color: var(--text-primary);
     height: 100vh;
     display: flex;
     overflow: hidden;
 }
 
-.app-container {
-    display: flex;
+/* --- Views --- */
+.view {
+    display: none;
     width: 100%;
     height: 100%;
 }
 
-/* Sidebar */
+.view.active {
+    display: flex;
+}
+
+/* --- Login Box --- */
+.login-container {
+    margin: auto;
+    padding: 48px 40px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-card);
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+}
+
+.login-container h2 {
+    margin-bottom: 24px;
+    font-weight: 500;
+}
+
+.login-container input {
+    width: 100%;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    outline: none;
+    font-size: 1rem;
+    background: var(--bg-main);
+}
+
+.login-container button {
+    width: 100%;
+    padding: 16px;
+    border-radius: var(--radius-pill);
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-weight: 500;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.login-container button:hover {
+    background: var(--accent-hover);
+}
+
+/* --- Sidebar --- */
 .sidebar {
     width: 280px;
-    background-color: var(--sidebar-bg);
-    border-right: 1px solid var(--border);
+    background-color: var(--bg-surface);
     padding: 24px;
     display: flex;
     flex-direction: column;
+    gap: 16px;
 }
 
-.logo {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-bottom: 32px;
-}
-
-.upload-section h3 {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 16px;
-    letter-spacing: 0.05em;
-}
-
-.file-list {
-    margin: 12px 0;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.btn {
-    width: 100%;
-    padding: 10px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    font-weight: 500;
+.nav-item {
+    padding: 12px 20px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
-    transition: 0.2s;
-    border: none;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.btn.secondary {
-    background-color: #ffffff;
-    border: 1px solid var(--border);
-    color: var(--text-main);
+.nav-item:hover,
+.nav-item.active {
+    background-color: #E1E5EA;
+    color: var(--text-primary);
 }
 
-.btn.secondary:hover {
-    background-color: #f3f4f6;
-}
-
-.btn.primary {
-    background-color: var(--text-main);
-    color: #ffffff;
-    margin-top: 8px;
-}
-
-.btn.primary:hover {
-    background-color: #374151;
-}
-
-.status-msg {
-    margin-top: 12px;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-/* Chat Area */
-.chat-wrapper {
+/* --- Main Content Area --- */
+.main-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     position: relative;
 }
 
+.header {
+    padding: 20px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-main);
+    z-index: 10;
+}
+
+.project-selector {
+    padding: 10px 24px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    font-size: 0.95rem;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+}
+
+/* --- Chat Interface --- */
 .chat-container {
     flex: 1;
-    padding: 40px;
+    padding: 20px 40px 140px 40px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    padding-bottom: 120px;
+    gap: 32px;
 }
 
 .message {
     display: flex;
-    max-width: 80%;
+    max-width: 85%;
 }
 
 .message.user {
@@ -130,14 +162,14 @@ body {
 }
 
 .bubble {
-    padding: 14px 20px;
-    border-radius: 20px;
-    line-height: 1.5;
-    font-size: 0.95rem;
+    padding: 16px 24px;
+    border-radius: var(--radius-card);
+    line-height: 1.6;
+    font-size: 1rem;
 }
 
 .message.user .bubble {
-    background-color: var(--user-bubble);
+    background-color: var(--bg-surface);
     border-bottom-right-radius: 4px;
 }
 
@@ -146,56 +178,42 @@ body {
     padding: 0;
 }
 
-/* Input Area */
+/* --- Chat Input Box --- */
 .input-wrapper {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
     padding: 24px 40px;
-    background: linear-gradient(transparent, #ffffff 40%);
+    background: linear-gradient(transparent, var(--bg-main) 30%);
 }
 
 .input-box {
-    background-color: #ffffff;
-    border: 1px solid var(--border);
-    border-radius: 32px;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-pill);
     display: flex;
     align-items: center;
-    padding: 8px 8px 8px 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    padding: 8px 8px 8px 24px;
     max-width: 800px;
     margin: 0 auto;
 }
 
-.model-dropdown {
-    border: none;
-    background-color: transparent;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    font-weight: 500;
-    outline: none;
-    cursor: pointer;
-    padding-right: 8px;
-    border-right: 1px solid var(--border);
-}
-
-#user-input {
+.input-box input {
     flex: 1;
     border: none;
-    padding: 12px 16px;
-    font-size: 0.95rem;
-    outline: none;
     background: transparent;
+    font-size: 1rem;
+    outline: none;
+    color: var(--text-primary);
 }
 
-#send-btn {
-    background-color: var(--text-main);
+.send-btn {
+    background: var(--text-primary);
     color: white;
     border: none;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -203,16 +221,73 @@ body {
     transition: 0.2s;
 }
 
-#send-btn:hover {
-    background-color: var(--primary);
+.send-btn:hover {
+    background: #000000;
 }
 
-#send-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+/* --- Admin Panel --- */
+.admin-panel {
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
 }
 
-/* --- Markdown & Table Styling --- */
+.admin-panel h1 {
+    font-weight: 400;
+    font-size: 2rem;
+    margin-bottom: 16px;
+}
+
+.card {
+    background: var(--bg-surface);
+    padding: 32px;
+    border-radius: var(--radius-card);
+}
+
+.card h2 {
+    margin-bottom: 24px;
+    font-weight: 500;
+    font-size: 1.2rem;
+}
+
+.form-group {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.form-group input,
+.form-group select {
+    padding: 14px 24px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    outline: none;
+    flex: 1;
+    min-width: 200px;
+}
+
+.btn-pill {
+    padding: 14px 32px;
+    border-radius: var(--radius-pill);
+    border: none;
+    background: var(--text-primary);
+    color: white;
+    cursor: pointer;
+    font-weight: 500;
+    transition: 0.2s;
+}
+
+.btn-pill:hover {
+    background: #000000;
+}
+
+/* --- Markdown Tables & Charts in Chat --- */
 .bubble p {
     margin-bottom: 12px;
 }
@@ -230,46 +305,40 @@ body {
 .bubble table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 12px;
-    margin-bottom: 12px;
-    font-size: 0.85rem;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
     display: block;
-    /* Allows scrolling on small screens */
 }
 
 .bubble th,
 .bubble td {
-    padding: 10px 14px;
+    padding: 12px 16px;
     text-align: left;
     border-bottom: 1px solid var(--border);
 }
 
 .bubble th {
-    background-color: #f9fafb;
+    background-color: #F8F9FA;
     font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    color: var(--text-secondary);
 }
 
 .bubble tr:last-child td {
     border-bottom: none;
 }
 
-/* --- Chart Styling --- */
 .chart-container {
     position: relative;
-    height: 300px;
+    height: 350px;
     width: 100%;
-    max-width: 600px;
+    min-width: 500px;
     margin-top: 16px;
     margin-bottom: 16px;
-    padding: 16px;
-    background-color: #ffffff;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    padding: 24px;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-card);
 }
