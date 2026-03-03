@@ -249,24 +249,25 @@ async function sendChat() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
     const sendBtn = document.querySelector('.send-btn');
+    const inputBoxContainer = document.querySelector('.input-box'); // Target the box for the glow
 
     if (!text) return;
 
     const projectId = document.getElementById('project-selector').value;
-    if (!projectId) return alert("Please select a project to query.");
+    if (!projectId || projectId === "") {
+        return alert("Please select a valid project from the dropdown first.");
+    }
 
     appendMessage('user', text);
     input.value = '';
+
+    // --- UI LOCK & ANIMATION START ---
     sendBtn.disabled = true;
+    input.disabled = true;
+    input.placeholder = "AI is analyzing...";
+    inputBoxContainer.classList.add('ai-thinking'); // Start the breathing glow
 
-    // Loading indicator
     const container = document.getElementById('chat-container');
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = `message ai loading-msg`;
-    loadingDiv.innerHTML = `<div class="bubble" style="color: var(--text-secondary);">Analyzing data...</div>`;
-    container.appendChild(loadingDiv);
-    container.scrollTop = container.scrollHeight;
-
     const fd = new FormData();
     fd.append("message", text);
     fd.append("project_id", projectId);
@@ -275,7 +276,6 @@ async function sendChat() {
     try {
         const res = await apiCall('/chat', { method: 'POST', body: fd });
         const data = await res.json();
-        container.removeChild(loadingDiv);
 
         if (res.ok) {
             appendMessage('ai', data.answer);
@@ -283,10 +283,13 @@ async function sendChat() {
             appendMessage('ai', `⚠️ Error: ${data.detail}`);
         }
     } catch (e) {
-        container.removeChild(loadingDiv);
         appendMessage('ai', "❌ Failed to connect to backend server.");
     } finally {
+        // --- UI UNLOCK & ANIMATION STOP ---
+        inputBoxContainer.classList.remove('ai-thinking'); // Stop the glow
+        input.disabled = false;
+        input.placeholder = "Ask a question about the project data...";
         sendBtn.disabled = false;
-        input.focus();
+        input.focus(); // Snap the cursor back for the next question
     }
 }
