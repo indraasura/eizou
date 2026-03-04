@@ -671,15 +671,16 @@ async function processVoiceQuery(question) {
 function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
     
-    // 1. Force the variable to be a string (clears Type warnings)
-    const safeText = markdownText ? markdownText.toString() : "";
+    // Safety check: Make sure we actually have text
+    if (!markdownText) {
+        setVoiceState('listening', "I'm listening...");
+        return;
+    }
     
-    // 2. Build the exact same regex using strings (bypasses IDE highlighting glitches)
-    const formatRegex = new RegExp('[*#_`~]', 'g');
-    const citeRegex = new RegExp('\\', 'g');
-    
-    // 3. Execute the clean
-    const cleanText = safeText.replace(formatRegex, '').replace(citeRegex, '');
+    // The safest, simplest way to strip characters without crashing
+    let cleanText = markdownText.toString();
+    cleanText = cleanText.replace(/[*#_`~]/g, "");       // Removes *, #, _, `, ~
+    cleanText = cleanText.replace(/\/g, "");  // Removes tags
     
     setVoiceState('speaking', cleanText);
     
@@ -687,10 +688,10 @@ function speakResponse(markdownText) {
     
     // Optional: Pick a better voice if available
     const voices = synth.getVoices();
-    const googleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
+    const googleVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha'));
     if (googleVoice) utterance.voice = googleVoice;
     
-    utterance.rate = 1.05; // Slightly faster sounds more natural
+    utterance.rate = 1.05; 
     
     // 5. When the AI finishes talking, go back to listening!
     utterance.onend = () => {
