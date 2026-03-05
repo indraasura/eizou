@@ -76,7 +76,7 @@ function switchTab(tabId) {
 
     document.getElementById(`tab-${tabId}`).style.display = 'block';
     event.currentTarget.classList.add('active');
-    
+
     // THE TRIGGER: Load data when admin tab opens
     if (tabId === 'admin') {
         loadAdminData();
@@ -411,7 +411,7 @@ async function loadAdminProjects() {
         const data = await res.json();
         const tbody = document.getElementById('admin-project-list');
         tbody.innerHTML = '';
-        
+
         if (data.projects) {
             data.projects.forEach(p => {
                 tbody.innerHTML += `
@@ -435,7 +435,7 @@ async function loadAdminUsers() {
         const data = await res.json();
         const tbody = document.getElementById('admin-user-list');
         tbody.innerHTML = '';
-        
+
         if (data.users) {
             data.users.forEach(u => {
                 const roleClass = u.role === 'admin' ? 'admin' : '';
@@ -461,7 +461,7 @@ async function loadAdminDocuments() {
         const data = await res.json();
         const tbody = document.getElementById('admin-document-list');
         tbody.innerHTML = '';
-        
+
         if (data.files) {
             data.files.forEach(f => {
                 const date = new Date(f.uploaded_at).toLocaleDateString();
@@ -491,7 +491,7 @@ async function deleteProject(id) {
 async function editProject(id, currentName) {
     const newName = prompt("Enter new project name:", currentName);
     if (!newName || newName === currentName) return;
-    
+
     const fd = new FormData();
     fd.append("name", newName);
     await apiCall(`/admin/projects/${id}`, { method: 'PUT', body: fd });
@@ -508,7 +508,7 @@ async function deleteUser(id) {
 async function toggleUserRole(id, currentRole) {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
     if (!confirm(`Change user role to ${newRole.toUpperCase()}?`)) return;
-    
+
     const fd = new FormData();
     fd.append("role", newRole);
     await apiCall(`/admin/users/${id}/role`, { method: 'PUT', body: fd });
@@ -525,14 +525,14 @@ async function deleteDocument(id) {
 function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    
+
     sidebar.classList.toggle('open');
     overlay.classList.toggle('active');
 }
 
 // Auto-close sidebar when switching tabs on mobile
 const originalSwitchTab = switchTab;
-switchTab = function(tabId) {
+switchTab = function (tabId) {
     originalSwitchTab(tabId);
     if (window.innerWidth <= 768) {
         document.querySelector('.sidebar').classList.remove('open');
@@ -586,7 +586,7 @@ function setVoiceState(state, text) {
     if (state === 'listening') statusText.innerText = "Listening...";
     if (state === 'thinking') statusText.innerText = "Thinking...";
     if (state === 'speaking') statusText.innerText = "Speaking...";
-    
+
     if (text) transcriptText.innerText = text;
 }
 
@@ -594,7 +594,7 @@ function startListening() {
     if (!isVoiceModeActive) return;
     synth.cancel(); // Ensure AI stops talking if we start listening
     setVoiceState('listening', "I'm listening...");
-    
+
     try {
         recognition.start();
     } catch (e) { console.log("Recognition already started"); }
@@ -618,9 +618,9 @@ recognition.onresult = (event) => {
 // 2. When the user stops speaking, send it to the backend
 recognition.onend = () => {
     if (!isVoiceModeActive) return;
-    
+
     const finalQuestion = document.getElementById('voice-transcript').innerText;
-    
+
     // If they didn't say anything, just start listening again
     if (finalQuestion === "I'm listening..." || finalQuestion.trim() === "") {
         startListening();
@@ -634,7 +634,7 @@ recognition.onend = () => {
 // 3. Send to API and handle response
 async function processVoiceQuery(question) {
     setVoiceState('thinking', question);
-    
+
     const projectId = document.getElementById('project-selector').value;
     if (!projectId) {
         speakResponse("Please select a project first.");
@@ -647,58 +647,90 @@ async function processVoiceQuery(question) {
     fd.append("model", document.getElementById('model-select').value || "gemini-2.5-flash");
 
     try {
-        const res = await fetch(`${API_BASE_URL}/chat`, {
+        const res = await fetch(`${API_URL}/chat`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${localStorage.getItem('nexus_token')}` },
             body: fd
         });
 
+        // NEW: Check if the server rejected the request before trying to parse JSON
+        if (!res.ok) {
+            const errorData = await res.text();
+            console.error("Backend Error Details:", errorData);
+            throw new Error(`Server responded with status: ${res.status}`);
+        }
+
         const data = await res.json();
         
-        // Inject into normal chat history so it's saved
+        // Inject into normal chat history
         appendMessage('user', question);
         appendMessage('ai', data.answer);
         
         // Speak the answer out loud
         speakResponse(data.answer);
 
-    } catch (error) {
-        speakResponse("Sorry, I encountered an error checking the database.");
+   } catch (error) {
+        console.error("Voice Query Failed:", error); 
+        
+        // Make the AI verbally tell you if you aren't logged in
+        if (error.message.includes("401")) {
+            speakResponse("Your session has expired. Please sign in to access the project data.");
+        } else {
+            speakResponse("Sorry, the server connection failed. Please check the console.");
+        }
     }
 }
 
-// 4. Clean text and speak it
+// 4. Clean text and speak it (Safe Loop Version)
 function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
     
-    // Safety check: Make sure we actually have text
     if (!markdownText) {
         setVoiceState('listening', "I'm listening...");
         return;
     }
     
-    // The safest, simplest way to strip characters without crashing
     let cleanText = markdownText.toString();
-    cleanText = cleanText.replace(/[*#_`~]/g, "");       // Removes *, #, _, `, ~
-    cleanText = cleanText.replace(/\/g, "");  // Removes tags
     
+    // 1. Strip markdown
+    cleanText = cleanText.split('*').join('');
+    cleanText = cleanText.split('#').join('');
+    cleanText = cleanText.split('_').join('');
+    cleanText = cleanText.split('`').join('');
+    cleanText = cleanText.split('~').join('');
+    
+    // 2. Strip tags without using while loops or regex
+    let chunks = cleanText.split("[cite:");    
+
+    for (let i = 1; i < chunks.length; i++) {
+        let closeIndex = chunks[i].indexOf(']');
+        if (closeIndex !== -1) {
+            cleanText += chunks[i].substring(closeIndex + 1);
+        } else {
+            cleanText += chunks[i];
+        }
+    }
+    
+    // 3. Update UI
     setVoiceState('speaking', cleanText);
     
+    // 4. Speak
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Optional: Pick a better voice if available
-    const voices = synth.getVoices();
-    const googleVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha'));
-    if (googleVoice) utterance.voice = googleVoice;
-    
     utterance.rate = 1.05; 
     
-    // 5. When the AI finishes talking, go back to listening!
+    const voices = window.speechSynthesis.getVoices();
+    const googleVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha'));
+    if (googleVoice) {
+        utterance.voice = googleVoice;
+    }
+    
     utterance.onend = () => {
-        if (isVoiceModeActive) startListening();
+        if (isVoiceModeActive) {
+            startListening();
+        }
     };
     
-    synth.speak(utterance);
+    window.speechSynthesis.speak(utterance);
 }
 
 // Ensure this runs when the page loads
