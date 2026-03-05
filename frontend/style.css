@@ -743,11 +743,11 @@ body {
 }
 
 #voice-transcript {
-    font-size: 1.5rem;
-    max-width: 600px;
-    min-height: 60px;
-    line-height: 1.4;
-    font-weight: 400;
+    text-align: left;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    padding: 10px;
+    min-height: 80px;
 }
 
 /* --- THE SPHERE & ANIMATIONS --- */
@@ -783,7 +783,7 @@ body {
 
 /* State 3: Speaking (Rapid, fluctuating modulation) */
 .voice-sphere.speaking {
-    animation: speak 0.4s infinite alternate ease-in-out;
+    animation: speak 1s infinite alternate ease-in-out;
     background: linear-gradient(135deg, #4285F4, #0A56D0);
 }
 

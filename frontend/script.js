@@ -33,6 +33,9 @@ async function login() {
             authToken = data.token;
             currentRole = data.role;
 
+            // NEW: Actually save the token to the browser's storage!
+            localStorage.setItem('nexus_token', data.token);
+
             // Set UI details
             document.getElementById('user-badge').innerText = data.email;
             document.getElementById('view-login').classList.remove('active');
@@ -686,7 +689,7 @@ function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
     
     if (!markdownText) {
-        setVoiceState('listening', "I'm listening...");
+        setVoiceState('listening', "...");
         return;
     }
     
@@ -716,19 +719,43 @@ function speakResponse(markdownText) {
     
     // 4. Speak
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 1.05; 
+    utterance.rate = 0.85; 
     
+    // Voice selection    
     const voices = window.speechSynthesis.getVoices();
-    const googleVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha'));
-    if (googleVoice) {
-        utterance.voice = googleVoice;
+    console.log("Available Voices: ", voices.map(v => v.name));
+
+    // Look for clear English voice (Can change strings to try different voices)
+    const preferredVoice = voices.find(v => 
+        v.name.includes('Google US English') || 
+        v.name.includes('Microsoft Zira') ||
+        v.name.includes ('en-US')
+    );
+
+    if (preferredVoice) {
+        utterance.voice = preferredVoice
     }
-    
-    utterance.onend = () => {
-        if (isVoiceModeActive) {
-            startListening();
+
+    // Typing animation sync
+
+    // Clear UI before AI starts speaking
+    setVoiceState('speaking', "");
+
+    // Fire event exactly when AI begins speaking
+    utterance.onboundary = (event) => {
+        if (event.name === 'word'){
+            const revealedText = cleanText.substring(0, event.charIndex + 10);
+            setVoiceState('speaking', revealedText)
         }
-    };
+    }
+
+    // Failsafe: ensure that full text is shown when done
+    utterance.onend = () => {
+        setVoiceState('speaking', cleanText);
+        if (isVoiceModeActive){
+            startListening()
+        }
+    }
     
     window.speechSynthesis.speak(utterance);
 }
