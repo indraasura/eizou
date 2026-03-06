@@ -17,7 +17,7 @@
             <div class="logo-container">
                 <img class="logo" src="./nexus_logo.png" alt="Nexus logo">
                 <br><br>
-                <h2>Complex Data. Simplified Insights. Absolute Clarity.</h2>
+                <h2>Get insights from complex documents with absolute clarity.</h2>
             </div>
             <div class="login-form-container">
                 <h2>Sign In</h2>
@@ -86,6 +86,8 @@
                         <button class="icon-btn" onclick="toggleVoiceMode()" title="Voice Mode">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
                         </button>
+
+                        <div id="mentions-autocomplete"></div>
                         
                         <input type="text" id="user-input" placeholder="Ask a question about the project data..."
                             onkeypress="if(event.key === 'Enter') sendChat()">
@@ -202,7 +204,7 @@
                             </select>
                             <input type="file" id="file-upload" multiple accept=".xlsx,.csv,.ppt,.pptx, .pdf"
                                 style="background: var(--bg-main);">
-                            <button class="btn-pill" onclick="uploadData()" id="upload-btn">Sync to Vector DB</button>
+                            <button class="btn-pill" onclick="uploadData()" id="upload-btn">Train model</button>
                         </div>
                         <div id="upload-status"
                             style="margin-top: 12px; font-weight: 500; color: var(--text-secondary);"></div>

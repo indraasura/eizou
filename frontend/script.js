@@ -1,5 +1,5 @@
 // Change this to your Render URL when deploying https://nexus-backend-service.onrender.com
-const API_URL = "https://nexus-backend-service.onrender.com";
+const API_URL = "http://127.0.0.1:8000";
 
 let authToken = null;
 let currentRole = null;
@@ -214,44 +214,58 @@ function clearChat() {
     document.getElementById('chat-container').innerHTML = `<div class="message ai"><div class="bubble">Context switched to <b>${projectName}</b>. How can I help you analyze this data?</div></div>`;
 }
 
-function appendMessage(role, text) {
+function appendMessage(role, text, sources = []) {
     const container = document.getElementById('chat-container');
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
 
+    // 1. Parse Markdown and Handle Charts
     let htmlContent = text;
     let chartConfigs = [];
-
-    // Check if the AI output a Chart.js block
     const chartRegex = /```chart\n([\s\S]*?)\n```/g;
+
     htmlContent = htmlContent.replace(chartRegex, (match, jsonString) => {
         const chartId = 'chart-' + Math.random().toString(36).substr(2, 9);
         try {
             const config = JSON.parse(jsonString);
-
-            // FORCE the chart to be fully responsive and stretch to the container
             if (!config.options) config.options = {};
             config.options.responsive = true;
             config.options.maintainAspectRatio = false;
-
             chartConfigs.push({ id: chartId, config: config });
-
-            // Remove the inline max-width and increase the height for a cinematic view
-            return `<div class="chart-container" style="position:relative; height:450px; width:100%; background:var(--bg-main); padding:24px; border-radius:16px; border:1px solid var(--border); margin-top: 16px;"><canvas id="${chartId}"></canvas></div>`;
+            return `<div class="chart-container" style="position:relative; height:350px; width:100%; margin-top:16px;"><canvas id="${chartId}"></canvas></div>`;
         } catch (e) {
-            return `<div style="color:red;">⚠️ AI generated invalid chart data structure.</div>`;
+            return `<div style="color:red;">⚠️ Invalid chart data.</div>`;
         }
     });
 
-    // Parse Markdown for tables and bold text
     htmlContent = marked.parse(htmlContent);
-    msgDiv.innerHTML = `<div class="bubble">${htmlContent}</div>`;
+
+    // 2. Generate Source Pills if they exist (AI messages only)
+    let sourcesHtml = "";
+    if (role === 'ai' && sources && sources.length > 0) {
+        sourcesHtml = `
+            <div class="sources-list">
+                <span class="sources-label">Sources:</span>
+                ${sources.map(s => `
+                    <a href="${s.url}" target="_blank" class="source-pill">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                        ${s.name}
+                    </a>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    msgDiv.innerHTML = `<div class="bubble">${htmlContent}${sourcesHtml}</div>`;
     container.appendChild(msgDiv);
 
-    // Render any charts found
+    // 3. Render Charts
     chartConfigs.forEach(chart => {
-        const ctx = document.getElementById(chart.id).getContext('2d');
-        new Chart(ctx, chart.config);
+        const el = document.getElementById(chart.id);
+        if (el) {
+            const ctx = el.getContext('2d');
+            new Chart(ctx, chart.config);
+        }
     });
 
     container.scrollTop = container.scrollHeight;
@@ -261,25 +275,22 @@ async function sendChat() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
     const sendBtn = document.querySelector('.send-btn');
-    const inputBoxContainer = document.querySelector('.input-box'); // Target the box for the glow
+    const inputBoxContainer = document.querySelector('.input-box');
 
     if (!text) return;
 
     const projectId = document.getElementById('project-selector').value;
-    if (!projectId || projectId === "") {
-        return alert("Please select a valid project from the dropdown first.");
-    }
+    if (!projectId) return alert("Please select a project first.");
 
+    // Add user message to UI
     appendMessage('user', text);
     input.value = '';
 
-    // --- UI LOCK & ANIMATION START ---
+    // UI Feedback
     sendBtn.disabled = true;
     input.disabled = true;
-    input.placeholder = "AI is analyzing...";
-    inputBoxContainer.classList.add('ai-thinking'); // Start the breathing glow
+    inputBoxContainer.classList.add('ai-thinking');
 
-    const container = document.getElementById('chat-container');
     const fd = new FormData();
     fd.append("message", text);
     fd.append("project_id", projectId);
@@ -290,22 +301,20 @@ async function sendChat() {
         const data = await res.json();
 
         if (res.ok) {
-            appendMessage('ai', data.answer);
+            // PASS THE SOURCES ARRAY TO THE MESSAGE RENDERER
+            appendMessage('ai', data.answer, data.sources);
         } else {
-            appendMessage('ai', `⚠️ Error: ${data.detail}`);
+            appendMessage('ai', `⚠️ Error: ${data.detail || "Request failed"}`);
         }
     } catch (e) {
-        appendMessage('ai', "❌ Failed to connect to backend server.");
+        appendMessage('ai', "❌ Backend connection failed.");
     } finally {
-        // --- UI UNLOCK & ANIMATION STOP ---
-        inputBoxContainer.classList.remove('ai-thinking'); // Stop the glow
+        inputBoxContainer.classList.remove('ai-thinking');
         input.disabled = false;
-        input.placeholder = "Ask a question about the project data...";
         sendBtn.disabled = false;
-        input.focus(); // Snap the cursor back for the next question
+        input.focus();
     }
 }
-
 // --- Custom Dropdown Engine ---
 function initializeNexusDropdowns() {
     document.querySelectorAll('.nexus-select').forEach(nativeSelect => {
@@ -639,15 +648,10 @@ async function processVoiceQuery(question) {
     setVoiceState('thinking', question);
 
     const projectId = document.getElementById('project-selector').value;
-    if (!projectId) {
-        speakResponse("Please select a project first.");
-        return;
-    }
-
     const fd = new FormData();
     fd.append("message", question);
     fd.append("project_id", projectId);
-    fd.append("model", document.getElementById('model-select').value || "gemini-2.5-flash");
+    fd.append("model", document.getElementById('model-select').value);
 
     try {
         const res = await fetch(`${API_URL}/chat`, {
@@ -656,54 +660,43 @@ async function processVoiceQuery(question) {
             body: fd
         });
 
-        // NEW: Check if the server rejected the request before trying to parse JSON
-        if (!res.ok) {
-            const errorData = await res.text();
-            console.error("Backend Error Details:", errorData);
-            throw new Error(`Server responded with status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error("Backend rejection");
 
         const data = await res.json();
-        
-        // Inject into normal chat history
+
+        // 1. Add to chat history with Sources
         appendMessage('user', question);
-        appendMessage('ai', data.answer);
-        
-        // Speak the answer out loud
+        appendMessage('ai', data.answer, data.sources);
+
+        // 2. Speak the response
         speakResponse(data.answer);
 
-   } catch (error) {
-        console.error("Voice Query Failed:", error); 
-        
-        // Make the AI verbally tell you if you aren't logged in
-        if (error.message.includes("401")) {
-            speakResponse("Your session has expired. Please sign in to access the project data.");
-        } else {
-            speakResponse("Sorry, the server connection failed. Please check the console.");
-        }
+    } catch (error) {
+        console.error(error);
+        speakResponse("Sorry, I encountered an error connecting to the knowledge base.");
     }
 }
 
 // 4. Clean text and speak it (Safe Loop Version)
 function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
-    
+
     if (!markdownText) {
         setVoiceState('listening', "...");
         return;
     }
-    
+
     let cleanText = markdownText.toString();
-    
+
     // 1. Strip markdown
     cleanText = cleanText.split('*').join('');
     cleanText = cleanText.split('#').join('');
     cleanText = cleanText.split('_').join('');
     cleanText = cleanText.split('`').join('');
     cleanText = cleanText.split('~').join('');
-    
+
     // 2. Strip tags without using while loops or regex
-    let chunks = cleanText.split("[cite:");    
+    let chunks = cleanText.split("[cite:");
 
     for (let i = 1; i < chunks.length; i++) {
         let closeIndex = chunks[i].indexOf(']');
@@ -713,23 +706,23 @@ function speakResponse(markdownText) {
             cleanText += chunks[i];
         }
     }
-    
+
     // 3. Update UI
     setVoiceState('speaking', cleanText);
-    
+
     // 4. Speak
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 0.85; 
-    
+    utterance.rate = 0.85;
+
     // Voice selection    
     const voices = window.speechSynthesis.getVoices();
     console.log("Available Voices: ", voices.map(v => v.name));
 
     // Look for clear English voice (Can change strings to try different voices)
-    const preferredVoice = voices.find(v => 
-        v.name.includes('Google US English') || 
+    const preferredVoice = voices.find(v =>
+        v.name.includes('Google US English') ||
         v.name.includes('Microsoft Zira') ||
-        v.name.includes ('en-US')
+        v.name.includes('en-US')
     );
 
     if (preferredVoice) {
@@ -743,7 +736,7 @@ function speakResponse(markdownText) {
 
     // Fire event exactly when AI begins speaking
     utterance.onboundary = (event) => {
-        if (event.name === 'word'){
+        if (event.name === 'word') {
             const revealedText = cleanText.substring(0, event.charIndex + 10);
             setVoiceState('speaking', revealedText)
         }
@@ -752,11 +745,11 @@ function speakResponse(markdownText) {
     // Failsafe: ensure that full text is shown when done
     utterance.onend = () => {
         setVoiceState('speaking', cleanText);
-        if (isVoiceModeActive){
+        if (isVoiceModeActive) {
             startListening()
         }
     }
-    
+
     window.speechSynthesis.speak(utterance);
 }
 

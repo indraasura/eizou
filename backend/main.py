@@ -8,6 +8,7 @@ import io
 from pathlib import Path
 from supabase import create_client, Client
 import PyPDF2
+import re
 
 # --- LANGCHAIN IMPORTS ---
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -88,13 +89,13 @@ def require_admin(user: dict = Depends(get_current_user)):
 @app.post("/login")
 def login(email: str = Form(...), password: str = Form(...)):
     try:
-        # 1. Create a TEMPORARY client just for logging in.
+        # Create a TEMPORARY client just for logging in.
         # This prevents the global 'supabase' client from losing its Admin privileges!
         temp_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         res = temp_client.auth.sign_in_with_password({"email": email, "password": password})
         token = res.session.access_token
         
-        # 2. Use the global, unpolluted admin client to check their role
+        # Use the global, unpolluted admin client to check their role
         profile = supabase.table("profiles").select("role").eq("id", res.user.id).execute()
         role = profile.data[0]["role"] if profile.data else "user"
         
@@ -272,7 +273,7 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
     openai_key = os.getenv("OPENAI_API_KEY")
     
     if "gemini" in model.lower():
-        embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", google_api_key=google_key, transport="rest")
+        embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-004", google_api_key=google_key, transport="rest")
     else:
         embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small", 
@@ -355,62 +356,74 @@ def format_docs(docs): return "\n\n".join(doc.page_content for doc in docs)
 async def chat(message: str = Form(...), project_id: int = Form(...), model: str = Form(...), user: dict = Depends(get_current_user)):
     google_key = os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
-    openrouter_key = os.getenv("OPENROUTER_API_KEY")
     
-    # --- DYNAMIC MODEL ROUTING ---
+    # 1. --- @MENTION DETECTION & FILTERING ---
+    # Looks for @filename.pdf or @document
+    mention_match = re.search(r"@(\S+)", message)
+    target_file = None
+    
+    if mention_match:
+        target_file = mention_match.group(1)
+        # Clean the message so the AI doesn't see the technical @tag
+        message = message.replace(f"@{target_file}", "").strip()
+
+    # 2. --- DYNAMIC MODEL ROUTING ---
     if "gemini" in model.lower():
-        # Vectors always use the same embedding model
         embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", google_api_key=google_key, transport="rest")
-        # Pass the exact model string from the frontend directly to LangChain
         llm = ChatGoogleGenerativeAI(model=model, google_api_key=google_key, temperature=0, transport="rest")
-    
     else:
-        # OpenAI setup with forced dimension compression
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=768, openai_api_key=openai_key)
         llm = ChatOpenAI(model="gpt-4o", openai_api_key=openai_key, temperature=0)
-    
-    # --- RAG RETRIEVAL (BYPASSING LANGCHAIN) ---
+
+    # 3. --- RAG RETRIEVAL WITH DYNAMIC FILTERING ---
     try:
-        print(f"\n--- 🔍 SEARCHING DB FOR PROJECT ID: {project_id} (Model: {model}) ---")
+        query_embedding = embeddings.embed_query(message)[:768]
         
-        # 1. Convert the user's message into numbers
-        query_embedding = embeddings.embed_query(message)
-        
-        # 2. THE CHAT SLICE FIX: Ensure the search vector is exactly 768 dimensions
-        query_embedding = query_embedding[:768]
-        
-        # 3. Call our Supabase SQL function directly, forcing project_id to be a strict integer
+        # Build the dynamic filter
+        # We always filter by project_id, but add source filter if @mention is used
+        rpc_filter = {"project_id": int(project_id)}
+        if target_file:
+            rpc_filter["source"] = target_file
+
         rpc_response = supabase.rpc(
             "match_project_documents",
             {
                 "query_embedding": query_embedding,
-                "match_count": 50,
-                "filter": {"project_id": int(project_id)} 
+                "match_count": 15, # Increased slightly to get better source variety
+                "filter": rpc_filter 
             }
         ).execute()
         
-        # 4. Extract the text chunks and print the diagnostic results
         chunks = rpc_response.data
-        print(f"✅ Found {len(chunks)} matching chunks in the database.")
         
+        # 4. --- EXTRACT UNIQUE SOURCES ---
+        sources = []
+        seen_sources = set()
+        
+        for row in chunks:
+            meta = row.get('metadata', {})
+            source_name = meta.get('source')
+            if source_name and source_name not in seen_sources:
+                sources.append({
+                    "name": source_name,
+                    "url": meta.get('file_url', '#') # Fallback to '#' if URL is missing
+                })
+                seen_sources.add(source_name)
+
         context_text = "\n\n".join([row["content"] for row in chunks])
         
         if not context_text.strip():
-            print("⚠️ WARNING: Database returned 0 chunks. The AI context is completely empty!")
+            context_text = "No relevant data found for this specific query or file."
             
     except Exception as e:
         print(f"Database search error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to search database: {str(e)}")
     
-    # --- AI GENERATION ---
+    # 5. --- AI GENERATION ---
     system_prompt = (
-        "You are an enterprise data assistant. Answer based on the context. "
-        "CHART INSTRUCTIONS: If the user asks for a graph or chart, you MUST output a valid JSON object "
-        "wrapped in a ```chart ... ``` block. "
-        "The JSON MUST follow this exact structure: "
-        "{{ \"type\": \"bar\", \"data\": {{ \"labels\": [\"A\", \"B\"], \"datasets\": [{{ \"label\": \"Title\", \"data\": [10, 20], \"backgroundColor\": \"#0A56D0\" }}] }}, \"options\": {{ \"responsive\": true }} }} "
-        "Use 'bar', 'line', or 'pie'. Use aesthetic colors. "
-        "If no data is available for a chart, explain why instead of providing an empty block. "
+        "You are an enterprise data assistant. Answer based on the context provided. "
+        "If the user mentioned a specific file via @, focus primarily on that data. "
+        "CHART INSTRUCTIONS: If the user asks for a graph, output valid JSON wrapped in a ```chart block. "
         "\n\nContext: {context}"
     )
 
@@ -423,11 +436,17 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
     
     try:
         answer = rag_chain.invoke({"context": context_text, "input": message})
-        return {"answer": answer}
+        
+        # Return both the answer AND the sources array for the frontend to render
+        return {
+            "answer": answer, 
+            "sources": sources,
+            "focused_file": target_file # Tell the frontend if a filter was applied
+        }
     except Exception as e:
         print(f"Chat execution error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate AI response: {str(e)}")
-
+        raise HTTPException(status_code=500, detail="Failed to generate AI response.")
+    
 # --- NEW ADMIN ENDPOINTS (EDIT & DELETE) ---
 
 @app.get("/admin/files")
