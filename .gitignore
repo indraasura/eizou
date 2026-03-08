@@ -6,3 +6,4 @@ nexus.db
 *.pkl
 .env
 venv
+backend/_pycache_

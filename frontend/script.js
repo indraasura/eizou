@@ -1,5 +1,5 @@
 // Change this to your Render URL when deploying https://nexus-backend-service.onrender.com
-const API_URL = "https://nexus-backend-service.onrender.com";
+const API_URL = "http://127.0.0.1:8000";
 
 let authToken = null;
 let currentRole = null;
@@ -33,7 +33,6 @@ async function login() {
             authToken = data.token;
             currentRole = data.role;
 
-            // Set UI details
             document.getElementById('user-badge').innerText = data.email;
             document.getElementById('view-login').classList.remove('active');
             document.getElementById('view-app').classList.add('active');
@@ -43,7 +42,7 @@ async function login() {
                 document.querySelector('.admin-only').style.display = 'flex';
             } else {
                 document.querySelector('.admin-only').style.display = 'none';
-                switchTab('chat'); // Force users to chat tab
+                switchTab('chat');
             }
 
             errorDiv.innerText = "";
@@ -70,24 +69,19 @@ function switchTab(tabId) {
     document.getElementById('tab-chat').style.display = tabId === 'chat' ? 'flex' : 'none';
     document.getElementById('tab-admin').style.display = tabId === 'admin' ? 'block' : 'none';
 
-    // Clear the active styling from all tabs
     document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
     document.getElementById(`tab-${tabId}`).style.display = 'block';
     event.currentTarget.classList.add('active');
     
-    // THE TRIGGER: Load data when admin tab opens
     if (tabId === 'admin') {
         loadAdminData();
     }
 
-    // Safely apply the active styling
     if (window.event && window.event.currentTarget) {
-        // If triggered by a physical mouse click
         window.event.currentTarget.classList.add('active');
     } else if (tabId === 'chat') {
-        // If triggered by code (like during a Standard User login)
         document.querySelectorAll('.nav-item')[0].classList.add('active');
     }
 }
@@ -219,33 +213,28 @@ function appendMessage(role, text) {
     let htmlContent = text;
     let chartConfigs = [];
 
-    // Check if the AI output a Chart.js block
     const chartRegex = /```chart\n([\s\S]*?)\n```/g;
     htmlContent = htmlContent.replace(chartRegex, (match, jsonString) => {
         const chartId = 'chart-' + Math.random().toString(36).substr(2, 9);
         try {
             const config = JSON.parse(jsonString);
 
-            // FORCE the chart to be fully responsive and stretch to the container
             if (!config.options) config.options = {};
             config.options.responsive = true;
             config.options.maintainAspectRatio = false;
 
             chartConfigs.push({ id: chartId, config: config });
 
-            // Remove the inline max-width and increase the height for a cinematic view
             return `<div class="chart-container" style="position:relative; height:450px; width:100%; background:var(--bg-main); padding:24px; border-radius:16px; border:1px solid var(--border); margin-top: 16px;"><canvas id="${chartId}"></canvas></div>`;
         } catch (e) {
             return `<div style="color:red;">⚠️ AI generated invalid chart data structure.</div>`;
         }
     });
 
-    // Parse Markdown for tables and bold text
     htmlContent = marked.parse(htmlContent);
     msgDiv.innerHTML = `<div class="bubble">${htmlContent}</div>`;
     container.appendChild(msgDiv);
 
-    // Render any charts found
     chartConfigs.forEach(chart => {
         const ctx = document.getElementById(chart.id).getContext('2d');
         new Chart(ctx, chart.config);
@@ -258,7 +247,7 @@ async function sendChat() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
     const sendBtn = document.querySelector('.send-btn');
-    const inputBoxContainer = document.querySelector('.input-box'); // Target the box for the glow
+    const inputBoxContainer = document.querySelector('.input-box');
 
     if (!text) return;
 
@@ -274,7 +263,7 @@ async function sendChat() {
     sendBtn.disabled = true;
     input.disabled = true;
     input.placeholder = "AI is analyzing...";
-    inputBoxContainer.classList.add('ai-thinking'); // Start the breathing glow
+    inputBoxContainer.classList.add('ai-thinking');
 
     const container = document.getElementById('chat-container');
     const fd = new FormData();
@@ -295,29 +284,26 @@ async function sendChat() {
         appendMessage('ai', "❌ Failed to connect to backend server.");
     } finally {
         // --- UI UNLOCK & ANIMATION STOP ---
-        inputBoxContainer.classList.remove('ai-thinking'); // Stop the glow
+        inputBoxContainer.classList.remove('ai-thinking');
         input.disabled = false;
         input.placeholder = "Ask a question about the project data...";
         sendBtn.disabled = false;
-        input.focus(); // Snap the cursor back for the next question
+        input.focus();
     }
 }
 
 // --- Custom Dropdown Engine ---
 function initializeNexusDropdowns() {
     document.querySelectorAll('.nexus-select').forEach(nativeSelect => {
-        // Prevent double initialization
         if (nativeSelect.nextElementSibling && nativeSelect.nextElementSibling.classList.contains('nexus-dropdown-wrapper')) {
             return;
         }
 
-        // 1. Build the UI wrapper
         const wrapper = document.createElement('div');
         wrapper.className = 'nexus-dropdown-wrapper';
         nativeSelect.parentNode.insertBefore(wrapper, nativeSelect.nextSibling);
         wrapper.appendChild(nativeSelect);
 
-        // 2. Build the visual button (trigger)
         const trigger = document.createElement('div');
         trigger.className = 'nexus-dropdown-trigger';
         trigger.innerHTML = `
@@ -330,7 +316,6 @@ function initializeNexusDropdowns() {
         optionsContainer.className = 'nexus-dropdown-options';
         wrapper.appendChild(optionsContainer);
 
-        // 3. The function that populates the custom options
         const renderOptions = () => {
             optionsContainer.innerHTML = '';
             Array.from(nativeSelect.options).forEach(option => {
@@ -339,32 +324,26 @@ function initializeNexusDropdowns() {
                 optDiv.dataset.value = option.value;
                 optDiv.innerText = option.text;
 
-                // When a custom option is clicked...
                 optDiv.addEventListener('click', () => {
-                    nativeSelect.value = option.value; // Update the hidden real select
-                    trigger.querySelector('.trigger-text').innerText = option.text; // Update text
+                    nativeSelect.value = option.value;
+                    trigger.querySelector('.trigger-text').innerText = option.text;
 
                     optionsContainer.querySelectorAll('.nexus-dropdown-option').forEach(el => el.classList.remove('selected'));
                     optDiv.classList.add('selected');
-                    wrapper.classList.remove('open'); // Close dropdown
+                    wrapper.classList.remove('open');
 
-                    // Fire the standard 'change' event so your existing logic (like clearChat) triggers
                     nativeSelect.dispatchEvent(new Event('change'));
                 });
                 optionsContainer.appendChild(optDiv);
             });
-            // Set initial text
             trigger.querySelector('.trigger-text').innerText = nativeSelect.options[nativeSelect.selectedIndex]?.text || 'Select...';
         };
 
-        // Render immediately
         renderOptions();
 
-        // 4. Watch for dynamic API updates (Crucial for your project lists!)
         const observer = new MutationObserver(renderOptions);
         observer.observe(nativeSelect, { childList: true });
 
-        // 5. Open/Close Logic
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
             document.querySelectorAll('.nexus-dropdown-wrapper').forEach(w => {
@@ -374,7 +353,6 @@ function initializeNexusDropdowns() {
         });
     });
 
-    // Close all if clicking outside
     document.addEventListener('click', () => {
         document.querySelectorAll('.nexus-dropdown-wrapper').forEach(w => w.classList.remove('open'));
     });
@@ -382,12 +360,8 @@ function initializeNexusDropdowns() {
 
 // --- Admin Panel Tab Switching ---
 function switchAdminTab(tabName) {
-    // 1. Remove active class from all tabs
     document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.remove('active'));
-    // 2. Hide all sections
     document.querySelectorAll('.admin-section').forEach(sec => sec.style.display = 'none');
-
-    // 3. Activate the clicked tab and show the corresponding section
     document.querySelector(`.admin-tab[onclick="switchAdminTab('${tabName}')"]`).classList.add('active');
 
     const targetSection = document.getElementById(`admin-sec-${tabName}`);
@@ -530,7 +504,6 @@ function toggleSidebar() {
     overlay.classList.toggle('active');
 }
 
-// Auto-close sidebar when switching tabs on mobile
 const originalSwitchTab = switchTab;
 switchTab = function(tabId) {
     originalSwitchTab(tabId);
@@ -548,8 +521,8 @@ let synth = window.speechSynthesis;
 // Initialize Speech Recognition
 if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
-    recognition.continuous = false; // Stop after they finish a sentence
-    recognition.interimResults = true; // Show words as they speak
+    recognition.continuous = false;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
 } else {
     console.warn("Speech recognition not supported in this browser.");
@@ -570,7 +543,7 @@ function toggleVoiceMode() {
     } else {
         overlay.style.display = 'none';
         recognition.stop();
-        synth.cancel(); // Stop AI speaking
+        synth.cancel();
     }
 }
 
@@ -592,7 +565,7 @@ function setVoiceState(state, text) {
 
 function startListening() {
     if (!isVoiceModeActive) return;
-    synth.cancel(); // Ensure AI stops talking if we start listening
+    synth.cancel();
     setVoiceState('listening', "I'm listening...");
     
     try {
@@ -600,7 +573,6 @@ function startListening() {
     } catch (e) { console.log("Recognition already started"); }
 }
 
-// 1. As the user speaks, update the text on screen
 recognition.onresult = (event) => {
     let interimTranscript = '';
     let finalTranscript = '';
@@ -615,23 +587,19 @@ recognition.onresult = (event) => {
     document.getElementById('voice-transcript').innerText = finalTranscript || interimTranscript;
 };
 
-// 2. When the user stops speaking, send it to the backend
 recognition.onend = () => {
     if (!isVoiceModeActive) return;
     
     const finalQuestion = document.getElementById('voice-transcript').innerText;
     
-    // If they didn't say anything, just start listening again
     if (finalQuestion === "I'm listening..." || finalQuestion.trim() === "") {
         startListening();
         return;
     }
 
-    // Send the voice query to the AI
     processVoiceQuery(finalQuestion);
 };
 
-// 3. Send to API and handle response
 async function processVoiceQuery(question) {
     setVoiceState('thinking', question);
     
@@ -655,11 +623,9 @@ async function processVoiceQuery(question) {
 
         const data = await res.json();
         
-        // Inject into normal chat history so it's saved
         appendMessage('user', question);
         appendMessage('ai', data.answer);
         
-        // Speak the answer out loud
         speakResponse(data.answer);
 
     } catch (error) {
@@ -667,32 +633,26 @@ async function processVoiceQuery(question) {
     }
 }
 
-// 4. Clean text and speak it
 function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
     
-    // 1. Force the variable to be a string (clears Type warnings)
     const safeText = markdownText ? markdownText.toString() : "";
     
-    // 2. Build the exact same regex using strings (bypasses IDE highlighting glitches)
     const formatRegex = new RegExp('[*#_`~]', 'g');
     const citeRegex = new RegExp('\\', 'g');
     
-    // 3. Execute the clean
     const cleanText = safeText.replace(formatRegex, '').replace(citeRegex, '');
     
     setVoiceState('speaking', cleanText);
     
     const utterance = new SpeechSynthesisUtterance(cleanText);
     
-    // Optional: Pick a better voice if available
     const voices = synth.getVoices();
     const googleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
     if (googleVoice) utterance.voice = googleVoice;
     
-    utterance.rate = 1.05; // Slightly faster sounds more natural
+    utterance.rate = 1.05; 
     
-    // 5. When the AI finishes talking, go back to listening!
     utterance.onend = () => {
         if (isVoiceModeActive) startListening();
     };
@@ -700,5 +660,4 @@ function speakResponse(markdownText) {
     synth.speak(utterance);
 }
 
-// Ensure this runs when the page loads
 document.addEventListener('DOMContentLoaded', initializeNexusDropdowns);

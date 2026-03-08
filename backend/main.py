@@ -47,13 +47,11 @@ def get_current_user(authorization: str = Header(None)):
     token = authorization.split(" ")[1]
     
     try:
-        # 1. Use a temporary client to validate the token so we don't pollute the global master key
         temp_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         user_response = temp_client.auth.get_user(token)
         user_id = user_response.user.id
         email = user_response.user.email
         
-        # 2. Use the global master client to fetch the role
         profile = supabase.table("profiles").select("role").eq("id", user_id).execute()
         role = profile.data[0]["role"] if profile.data else "user"
         
@@ -66,12 +64,10 @@ def get_current_user(authorization: str = Header(None)):
     token = authorization.split(" ")[1]
     
     try:
-        # Verify JWT with Supabase
         user_response = supabase.auth.get_user(token)
         user_id = user_response.user.id
         email = user_response.user.email
         
-        # Fetch Role from Profiles
         profile = supabase.table("profiles").select("role").eq("id", user_id).execute()
         role = profile.data[0]["role"] if profile.data else "user"
         
@@ -88,13 +84,11 @@ def require_admin(user: dict = Depends(get_current_user)):
 @app.post("/login")
 def login(email: str = Form(...), password: str = Form(...)):
     try:
-        # 1. Create a TEMPORARY client just for logging in.
-        # This prevents the global 'supabase' client from losing its Admin privileges!
+        
         temp_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         res = temp_client.auth.sign_in_with_password({"email": email, "password": password})
         token = res.session.access_token
         
-        # 2. Use the global, unpolluted admin client to check their role
         profile = supabase.table("profiles").select("role").eq("id", res.user.id).execute()
         role = profile.data[0]["role"] if profile.data else "user"
         
@@ -106,7 +100,6 @@ def login(email: str = Form(...), password: str = Form(...)):
 @app.post("/admin/users")
 def create_user(email: str = Form(...), password: str = Form(...), role: str = Form(...), admin: dict = Depends(require_admin)):
     try:
-        # Create a fresh, guaranteed Admin client for this specific action
         admin_client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
         
         res = admin_client.auth.admin.create_user({
@@ -116,7 +109,6 @@ def create_user(email: str = Form(...), password: str = Form(...), role: str = F
         })
         new_user_id = res.user.id
         
-        # Update their role in the profiles table
         admin_client.table("profiles").update({"role": role}).eq("id", new_user_id).execute()
         return {"status": "User provisioned successfully"}
     except Exception as e:
@@ -149,34 +141,31 @@ def list_users(admin: dict = Depends(require_admin)):
 # --- USER ENDPOINTS ---
 @app.get("/projects")
 def get_user_projects(user: dict = Depends(get_current_user)):
-    print(f"\n--- 🔍 FETCHING PROJECTS FOR: {user['email']} (Role: {user['role']}) ---")
+    print(f"\n--- FETCHING PROJECTS FOR: {user['email']} (Role: {user['role']}) ---")
     
     try:
         if user["role"] == "admin":
             projects = supabase.table("projects").select("*").execute()
-            print(f"✅ Admin Access: Retrieved {len(projects.data)} projects globally.")
+            print(f"Admin Access: Retrieved {len(projects.data)} projects globally.")
             return {"projects": projects.data}
         else:
-            # 1. Fetch which projects the user is mapped to
             assignments = supabase.table("project_users").select("project_id").eq("user_id", user["id"]).execute()
-            print(f"📌 Database Assignments Found: {assignments.data}")
+            print(f"Database Assignments Found: {assignments.data}")
             
             if not assignments.data:
-                print("⚠️ User has no mapped projects.")
+                print("User has no mapped projects.")
                 return {"projects": []}
                 
-            # 2. Extract IDs and force them to be INTEGERS so Supabase BIGINT doesn't silently reject them
             project_ids = [int(a["project_id"]) for a in assignments.data]
-            print(f"🔢 Querying Supabase for Project IDs: {project_ids}")
+            print(f"Querying Supabase for Project IDs: {project_ids}")
             
-            # 3. Fetch the actual project details
             projects = supabase.table("projects").select("*").in_("id", project_ids).execute()
-            print(f"✅ Retrieved Project Details: {projects.data}\n")
+            print(f"Retrieved Project Details: {projects.data}\n")
             
             return {"projects": projects.data}
             
     except Exception as e:
-        print(f"❌ CRITICAL ERROR FETCHING PROJECTS: {str(e)}\n")
+        print(f"CRITICAL ERROR FETCHING PROJECTS: {str(e)}\n")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     try:
         if user["role"] == "admin":
@@ -222,27 +211,20 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
     for file in files:
         contents = await file.read()
         ext = file.filename.split('.')[-1].lower()
-        
-        # 1. --- SAVE THE PHYSICAL FILE TO SUPABASE STORAGE ---
-        # Create a clean path (e.g., "project_1/financials.pdf")
         file_path = f"project_{project_id}/{file.filename}"
         
         try:
-            # Upload the raw bytes to the bucket (upsert=True overwrites if file with same name exists)
             supabase.storage.from_("project_files").upload(file_path, contents, file_options={"upsert": "true"})
             
-            # Get the public download URL
             file_url = supabase.storage.from_("project_files").get_public_url(file_path)
             
-            # Save the record to our SQL table
             supabase.table("project_files").insert({
                 "project_id": project_id,
                 "file_name": file.filename,
                 "file_url": file_url
             }).execute()
         except Exception as e:
-            print(f"⚠️ Failed to store physical file {file.filename}: {str(e)}")
-            # We print the error but continue so the AI can still vectorize the data!
+            print(f"Failed to store physical file {file.filename}: {str(e)}")
 
         # 2. --- PARSE TEXT FOR THE AI ---
         if ext in ['xlsx', 'xls']:
@@ -282,19 +264,14 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
             chunk_size=100
         )
         
-   # --- SURGICAL VECTOR INSERTION ---
     try:
-        # 1. Extract the raw text and metadata from LangChain's chunk objects
         texts = [chunk.page_content for chunk in chunks]
         metadatas = [chunk.metadata for chunk in chunks]
         
-        # 2. Generate the embeddings (Let LangChain generate the massive 3072 array if it wants to)
         raw_vectors = embeddings.embed_documents(texts)
         
-        # 3. THE SLICE: Force every single vector to be exactly 768 numbers long
         truncated_vectors = [vec[:768] for vec in raw_vectors]
         
-        # 4. Package them into a clean dictionary format for Supabase
         records = []
         for text, meta, vec in zip(texts, metadatas, truncated_vectors):
             records.append({
@@ -303,7 +280,6 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
                 "embedding": vec
             })
             
-        # 5. Insert directly into the database, completely bypassing LangChain's buggy wrapper!
         supabase.table("project_documents").insert(records).execute()
         
     except Exception as e:
@@ -359,13 +335,10 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
     
     # --- DYNAMIC MODEL ROUTING ---
     if "gemini" in model.lower():
-        # Vectors always use the same embedding model
         embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", google_api_key=google_key, transport="rest")
-        # Pass the exact model string from the frontend directly to LangChain
         llm = ChatGoogleGenerativeAI(model=model, google_api_key=google_key, temperature=0, transport="rest")
     
     else:
-        # OpenAI setup with forced dimension compression
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=768, openai_api_key=openai_key)
         llm = ChatOpenAI(model="gpt-4o", openai_api_key=openai_key, temperature=0)
     
@@ -373,13 +346,10 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
     try:
         print(f"\n--- 🔍 SEARCHING DB FOR PROJECT ID: {project_id} (Model: {model}) ---")
         
-        # 1. Convert the user's message into numbers
         query_embedding = embeddings.embed_query(message)
         
-        # 2. THE CHAT SLICE FIX: Ensure the search vector is exactly 768 dimensions
         query_embedding = query_embedding[:768]
         
-        # 3. Call our Supabase SQL function directly, forcing project_id to be a strict integer
         rpc_response = supabase.rpc(
             "match_project_documents",
             {
@@ -389,14 +359,13 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
             }
         ).execute()
         
-        # 4. Extract the text chunks and print the diagnostic results
         chunks = rpc_response.data
-        print(f"✅ Found {len(chunks)} matching chunks in the database.")
+        print(f"Found {len(chunks)} matching chunks in the database.")
         
         context_text = "\n\n".join([row["content"] for row in chunks])
         
         if not context_text.strip():
-            print("⚠️ WARNING: Database returned 0 chunks. The AI context is completely empty!")
+            print("WARNING: Database returned 0 chunks. The AI context is completely empty!")
             
     except Exception as e:
         print(f"Database search error: {str(e)}")
@@ -457,9 +426,7 @@ def edit_project(project_id: int, name: str = Form(...), admin: dict = Depends(r
 @app.delete("/admin/users/{user_id}")
 def delete_user(user_id: str, admin: dict = Depends(require_admin)):
     try:
-        # Delete from Auth completely using the master client
         supabase.auth.admin.delete_user(user_id)
-        # Delete from profiles table
         supabase.table("profiles").delete().eq("id", user_id).execute()
         return {"status": "User deleted"}
     except Exception as e:
@@ -476,13 +443,11 @@ def update_user_role(user_id: str, role: str = Form(...), admin: dict = Depends(
 @app.delete("/admin/files/{file_id}")
 def delete_file(file_id: int, admin: dict = Depends(require_admin)):
     try:
-        # 1. Get file details to remove from storage bucket
         file_record = supabase.table("project_files").select("*").eq("id", file_id).execute()
         if file_record.data:
             path = f"project_{file_record.data[0]['project_id']}/{file_record.data[0]['file_name']}"
             supabase.storage.from_("project_files").remove([path])
         
-        # 2. Delete the database record
         supabase.table("project_files").delete().eq("id", file_id).execute()
         return {"status": "File deleted"}
     except Exception as e:
