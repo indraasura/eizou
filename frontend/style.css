@@ -598,6 +598,7 @@ body {
 
 /* --- MOBILE RESPONSIVENESS (Max Width: 768px) --- */
 @media (max-width: 768px) {
+
     /* Login Screen Stacking */
     .login-container {
         flex-direction: column;
@@ -606,9 +607,20 @@ body {
         padding: 32px;
         text-align: center;
     }
-    .logo-container h2 { font-size: 1.2rem; }
-    .logo { width: 60%; margin: 0 auto; }
-    .login-form-container { width: 100%; max-width: 400px; }
+
+    .logo-container h2 {
+        font-size: 1.2rem;
+    }
+
+    .logo {
+        width: 60%;
+        margin: 0 auto;
+    }
+
+    .login-form-container {
+        width: 100%;
+        max-width: 400px;
+    }
 
     /* Sidebar to Sliding Drawer */
     .sidebar {
@@ -617,61 +629,116 @@ body {
         top: 0;
         z-index: 1000;
         transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
     }
-    .sidebar.open { left: 0; }
-    
+
+    .sidebar.open {
+        left: 0;
+    }
+
     #sidebar-overlay {
         display: none;
         position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.4);
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
         z-index: 999;
         backdrop-filter: blur(2px);
     }
-    #sidebar-overlay.active { display: block; }
+
+    #sidebar-overlay.active {
+        display: block;
+    }
 
     /* Header & Mobile Menu Trigger */
-    .header { padding: 16px; }
-    #mobile-menu-btn { display: flex !important; }
+    .header {
+        padding: 16px;
+    }
+
+    #mobile-menu-btn {
+        display: flex !important;
+    }
 
     /* Chat Interface */
-    .chat-container { padding: 16px 16px 120px 16px; }
-    .message { max-width: 95%; }
-    .input-wrapper { padding: 16px; }
-    
+    .chat-container {
+        padding: 16px 16px 120px 16px;
+    }
+
+    .message {
+        max-width: 95%;
+    }
+
+    .input-wrapper {
+        padding: 16px;
+    }
+
     /* Make model selector and input wrap cleanly */
-    .input-box { flex-wrap: wrap; border-radius: 16px; padding: 12px; }
-    .input-box .nexus-dropdown-wrapper { width: 100%; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .input-box {
+        flex-wrap: wrap;
+        border-radius: 16px;
+        padding: 12px;
+    }
+
+    .input-box .nexus-dropdown-wrapper {
+        width: 100%;
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+    }
 
     /* Admin Panel Adaptations */
-    .admin-panel { padding: 16px; }
-    .admin-tabs { 
-        overflow-x: auto; 
-        white-space: nowrap; /* Keeps tabs on one line */
-        padding-bottom: 8px; 
-        gap: 20px; 
+    .admin-panel {
+        padding: 16px;
     }
-    .admin-tabs::-webkit-scrollbar { display: none; } /* Clean scrolling */
-    
-    .card-container { flex-direction: column !important; }
-    .form-group { flex-direction: column; }
-    .form-group input, .form-group .nexus-dropdown-wrapper, .btn-pill { 
-        width: 100%; 
-        min-width: 100%; 
+
+    .admin-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        /* Keeps tabs on one line */
+        padding-bottom: 8px;
+        gap: 20px;
+    }
+
+    .admin-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Clean scrolling */
+
+    .card-container {
+        flex-direction: column !important;
+    }
+
+    .form-group {
+        flex-direction: column;
+    }
+
+    .form-group input,
+    .form-group .nexus-dropdown-wrapper,
+    .btn-pill {
+        width: 100%;
+        min-width: 100%;
     }
 
     /* Horizontal Scroll for Data Tables */
-    .card { padding: 20px; overflow-x: auto; }
-    
+    .card {
+        padding: 20px;
+        overflow-x: auto;
+    }
+
 }
 
 /* --- Fix: Make Chat Input Dropdown Open Upwards --- */
 .input-box .nexus-dropdown-options {
-    top: auto; 
-    bottom: calc(100% + 8px); /* Anchor to the top of the button instead of the bottom */
-    transform: translateY(10px); /* Adjust the animation starting point */
-    box-shadow: 0 -10px 30px rgba(0,0,0,0.08); /* Flip the shadow to point upwards */
+    top: auto;
+    bottom: calc(100% + 8px);
+    /* Anchor to the top of the button instead of the bottom */
+    transform: translateY(10px);
+    /* Adjust the animation starting point */
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.08);
+    /* Flip the shadow to point upwards */
 }
 
 .input-box .nexus-dropdown-wrapper.open .nexus-dropdown-options {
@@ -700,7 +767,10 @@ body {
 
 .voice-overlay {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: rgba(15, 15, 20, 0.95);
     backdrop-filter: blur(10px);
     z-index: 9999;
@@ -713,7 +783,8 @@ body {
 
 .close-voice-btn {
     position: absolute;
-    top: 32px; right: 32px;
+    top: 32px;
+    right: 32px;
     background: transparent;
     border: none;
     color: white;
@@ -723,7 +794,9 @@ body {
     transition: opacity 0.2s;
 }
 
-.close-voice-btn:hover { opacity: 1; }
+.close-voice-btn:hover {
+    opacity: 1;
+}
 
 .voice-container {
     display: flex;
@@ -738,7 +811,7 @@ body {
     font-weight: 500;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: rgba(255,255,255,0.6);
+    color: rgba(255, 255, 255, 0.6);
 }
 
 #voice-transcript {
@@ -752,7 +825,8 @@ body {
 /* --- THE SPHERE & ANIMATIONS --- */
 .sphere-wrapper {
     position: relative;
-    width: 200px; height: 200px;
+    width: 200px;
+    height: 200px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -760,7 +834,8 @@ body {
 }
 
 .voice-sphere {
-    width: 120px; height: 120px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     background: linear-gradient(135deg, #4285F4, #A13FF4);
     filter: blur(8px);
@@ -770,7 +845,7 @@ body {
 /* State 1: Listening (Slow, calm breathing) */
 .voice-sphere.listening {
     animation: breathe 3s infinite ease-in-out;
-    background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4));
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4));
 }
 
 /* State 2: Thinking (Spinning & Pulsing) */
@@ -787,20 +862,50 @@ body {
 }
 
 @keyframes breathe {
-    0% { transform: scale(1); opacity: 0.8; }
-    50% { transform: scale(1.15); opacity: 1; }
-    100% { transform: scale(1); opacity: 0.8; }
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    50% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
 }
 
 @keyframes think {
-    0% { transform: rotate(0deg) scale(1); background-position: 0% 50%; }
-    50% { transform: rotate(180deg) scale(0.9); background-position: 100% 50%; }
-    100% { transform: rotate(360deg) scale(1); background-position: 0% 50%; }
+    0% {
+        transform: rotate(0deg) scale(1);
+        background-position: 0% 50%;
+    }
+
+    50% {
+        transform: rotate(180deg) scale(0.9);
+        background-position: 100% 50%;
+    }
+
+    100% {
+        transform: rotate(360deg) scale(1);
+        background-position: 0% 50%;
+    }
 }
 
 @keyframes speak {
-    0% { transform: scale(1); filter: blur(8px); }
-    100% { transform: scale(1.3); filter: blur(12px); box-shadow: 0 0 40px rgba(66, 133, 244, 0.6); }
+    0% {
+        transform: scale(1);
+        filter: blur(8px);
+    }
+
+    100% {
+        transform: scale(1.3);
+        filter: blur(12px);
+        box-shadow: 0 0 40px rgba(66, 133, 244, 0.6);
+    }
 }
 
 /* --- NEXUS DYNAMIC LOADER --- */
@@ -816,9 +921,20 @@ body {
 }
 
 @keyframes nexus-fade {
-    0% { color: #444746; opacity: 0.7; }
-    50% { color: #0A56D0; opacity: 1; }
-    100% { color: #444746; opacity: 0.7; }
+    0% {
+        color: #444746;
+        opacity: 0.7;
+    }
+
+    50% {
+        color: #0A56D0;
+        opacity: 1;
+    }
+
+    100% {
+        color: #444746;
+        opacity: 0.7;
+    }
 }
 
 .step-icon {
@@ -831,6 +947,53 @@ body {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.sources-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.source-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.source-pill {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    padding: 6px 14px;
+    border-radius: 10px;
+    /* Material 3 style */
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.source-pill:hover {
+    background-color: #e1e5ea;
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.source-pill svg {
+    color: var(--accent);
 }
