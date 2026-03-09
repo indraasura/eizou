@@ -329,7 +329,7 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
             temperature=0,
             # additional_model_request_fields={
             #    "reasoning_effort": reasoning_effort
-            # }
+            #}
         )
     
     # --- RAG RETRIEVAL ---

@@ -1,5 +1,5 @@
 // Change this to your Render URL when deploying https://nexus-backend-service.onrender.com
-const API_URL = "https://nexus-backend-service.onrender.com";
+const API_URL = "http://127.0.0.1:8000";
 
 let authToken = null;
 let currentRole = null;
@@ -250,25 +250,47 @@ async function sendChat() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
     const sendBtn = document.querySelector('.send-btn');
-    const inputBoxContainer = document.querySelector('.input-box');
+    const container = document.getElementById('chat-container');
 
     if (!text) return;
 
     const projectId = document.getElementById('project-selector').value;
-    if (!projectId || projectId === "") {
-        return alert("Please select a valid project from the dropdown first.");
-    }
+    if (!projectId) return alert("Please select a project.");
 
-    appendMessage('user', text);
+    // 1. UI Setup
     input.value = '';
-
-    // --- UI LOCK & ANIMATION START ---
     sendBtn.disabled = true;
-    input.disabled = true;
-    input.placeholder = "AI is analyzing...";
-    inputBoxContainer.classList.add('ai-thinking');
+    appendMessage('user', text);
 
-    const container = document.getElementById('chat-container');
+    // 2. CREATE DYNAMIC LOADER
+    const loaderDiv = document.createElement('div');
+    loaderDiv.className = 'message ai loading-status';
+    loaderDiv.innerHTML = `
+        <div class="bubble" style="background: transparent;">
+            <div class="thinking-steps">
+                <div class="step-icon"></div>
+                <span id="nexus-status-text">Reading documents...</span>
+            </div>
+        </div>
+    `;
+    container.appendChild(loaderDiv);
+
+    // Dynamic Status Updates
+    const statuses = [
+        "Pin-pointing user's intent...",
+        "Analyzing relevant documents...",
+        "Extracting ...",
+        "Synthesizing insights...",
+        "Finalizing response structure..."
+    ];
+    let statusIndex = 0;
+    const statusInterval = setInterval(() => {
+        statusIndex = (statusIndex + 1) % statuses.length;
+        const statusEl = document.getElementById('nexus-status-text');
+        if (statusEl) statusEl.innerText = statuses[statusIndex];
+    }, 2000);
+
+    // 3. API Call
     const fd = new FormData();
     fd.append("message", text);
     fd.append("project_id", projectId);
@@ -277,6 +299,9 @@ async function sendChat() {
     try {
         const res = await apiCall('/chat', { method: 'POST', body: fd });
         const data = await res.json();
+        
+        clearInterval(statusInterval);
+        container.removeChild(loaderDiv); // Remove the loader
 
         if (res.ok) {
             appendMessage('ai', data.answer);
@@ -284,17 +309,14 @@ async function sendChat() {
             appendMessage('ai', `⚠️ Error: ${data.detail}`);
         }
     } catch (e) {
-        appendMessage('ai', "❌ Failed to connect to backend server.");
+        clearInterval(statusInterval);
+        if (container.contains(loaderDiv)) container.removeChild(loaderDiv);
+        appendMessage('ai', "❌ Backend connection failed.");
     } finally {
-        // --- UI UNLOCK & ANIMATION STOP ---
-        inputBoxContainer.classList.remove('ai-thinking');
-        input.disabled = false;
-        input.placeholder = "Ask a question about the project data...";
         sendBtn.disabled = false;
         input.focus();
     }
 }
-
 // --- Custom Dropdown Engine ---
 function initializeNexusDropdowns() {
     document.querySelectorAll('.nexus-select').forEach(nativeSelect => {
