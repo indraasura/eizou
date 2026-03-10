@@ -205,7 +205,7 @@ function clearChat() {
     document.getElementById('chat-container').innerHTML = `<div class="message ai"><div class="bubble">Context switched to <b>${projectName}</b>. How can I help you analyze this data?</div></div>`;
 }
 
-function appendMessage(role, text) {
+function appendMessage(role, text, sources = []) {
     const container = document.getElementById('chat-container');
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
@@ -213,6 +213,7 @@ function appendMessage(role, text) {
     let htmlContent = text;
     let chartConfigs = [];
 
+    // 1. --- Chart.js Regex Logic ---
     const chartRegex = /```chart\n([\s\S]*?)\n```/g;
     htmlContent = htmlContent.replace(chartRegex, (match, jsonString) => {
         const chartId = 'chart-' + Math.random().toString(36).substr(2, 9);
@@ -231,21 +232,48 @@ function appendMessage(role, text) {
         }
     });
 
+    // 2. --- Markdown Parsing ---
     htmlContent = marked.parse(htmlContent);
-    msgDiv.innerHTML = `<div class="bubble">${htmlContent}</div>`;
+
+    // 3. --- Material Design Source Pills ---
+    let sourcesHtml = "";
+    if (role === 'ai' && sources && sources.length > 0) {
+        sourcesHtml = `<div class="sources-container"><div class="source-label">Sources used</div>`;
+
+        sources.forEach(src => {
+            // Check if it's a file that might need downloading (XLS, PPT) vs opening (PDF)
+            const isDownloadable = src.name.match(/\.(ppt|pptx|xls|xlsx|csv)$/i);
+
+            // Note: window.open bypasses the 'save as index.html' bug by hitting the bucket URL directly
+            sourcesHtml += `
+                <div class="source-pill" 
+                     onclick="window.open('${src.url}', '_blank')" 
+                     title="View ${src.name}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    <span class="pill-text">${src.name}</span>
+                </div>`;
+        });
+        sourcesHtml += `</div>`;
+    }
+
+    // 4. --- Inject HTML into Bubble ---
+    msgDiv.innerHTML = `<div class="bubble">${htmlContent}${sourcesHtml}</div>`;
     container.appendChild(msgDiv);
 
+    // 5. --- Initialize Charts ---
     chartConfigs.forEach(chart => {
         const ctx = document.getElementById(chart.id).getContext('2d');
         new Chart(ctx, chart.config);
     });
 
-    // CRITICAL: Give the browser 100ms to paint the new HTML to the screen before scrolling
+    // 6. --- Scroll to View ---
     setTimeout(() => {
         msgDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, 100);
 }
-
 async function sendChat() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
@@ -254,33 +282,33 @@ async function sendChat() {
 
     if (!text) return;
 
+    // 1. Project Validation
     const projectId = document.getElementById('project-selector').value;
     if (!projectId) return alert("Please select a project.");
 
-    // 1. UI Setup
+    // 2. UI Setup & User Message
     input.value = '';
     sendBtn.disabled = true;
     appendMessage('user', text);
 
-    // 2. CREATE DYNAMIC LOADER
+    // 3. CREATE DYNAMIC LOADER (The "Thinking" state)
     const loaderDiv = document.createElement('div');
     loaderDiv.className = 'message ai loading-status';
     loaderDiv.innerHTML = `
-        <div class="bubble" style="background: transparent;">
+        <div class="bubble" style="background: transparent; padding-left: 0;">
             <div class="thinking-steps">
                 <div class="step-icon"></div>
-                <span id="nexus-status-text">Reading documents...</span>
+                <span id="nexus-status-text">Searching Knowledge Base...</span>
             </div>
         </div>
     `;
     container.appendChild(loaderDiv);
 
-    // Dynamic Status Updates
+    // Cycle through professional status updates
     const statuses = [
-        "Pin-pointing user's intent...",
         "Analyzing relevant documents...",
-        "Extracting ...",
-        "Synthesizing insights...",
+        "Identifying key data points...",
+        "Synthesizing enterprise insights...",
         "Finalizing response structure..."
     ];
     let statusIndex = 0;
@@ -290,7 +318,7 @@ async function sendChat() {
         if (statusEl) statusEl.innerText = statuses[statusIndex];
     }, 2000);
 
-    // 3. API Call
+    // 4. API CALL
     const fd = new FormData();
     fd.append("message", text);
     fd.append("project_id", projectId);
@@ -299,19 +327,21 @@ async function sendChat() {
     try {
         const res = await apiCall('/chat', { method: 'POST', body: fd });
         const data = await res.json();
-        
+
+        // Stop loader and remove it
         clearInterval(statusInterval);
-        container.removeChild(loaderDiv); // Remove the loader
+        if (container.contains(loaderDiv)) container.removeChild(loaderDiv);
 
         if (res.ok) {
-            appendMessage('ai', data.answer);
+            // PASS BOTH THE ANSWER AND THE SOURCES ARRAY
+            appendMessage('ai', data.answer, data.sources);
         } else {
             appendMessage('ai', `⚠️ Error: ${data.detail}`);
         }
     } catch (e) {
         clearInterval(statusInterval);
         if (container.contains(loaderDiv)) container.removeChild(loaderDiv);
-        appendMessage('ai', "❌ Backend connection failed.");
+        appendMessage('ai', "❌ Backend connection failed. Check your local server.");
     } finally {
         sendBtn.disabled = false;
         input.focus();
@@ -410,7 +440,7 @@ async function loadAdminProjects() {
         const data = await res.json();
         const tbody = document.getElementById('admin-project-list');
         tbody.innerHTML = '';
-        
+
         if (data.projects) {
             data.projects.forEach(p => {
                 tbody.innerHTML += `
@@ -434,7 +464,7 @@ async function loadAdminUsers() {
         const data = await res.json();
         const tbody = document.getElementById('admin-user-list');
         tbody.innerHTML = '';
-        
+
         if (data.users) {
             data.users.forEach(u => {
                 const roleClass = u.role === 'admin' ? 'admin' : '';
@@ -460,7 +490,7 @@ async function loadAdminDocuments() {
         const data = await res.json();
         const tbody = document.getElementById('admin-document-list');
         tbody.innerHTML = '';
-        
+
         if (data.files) {
             data.files.forEach(f => {
                 const date = new Date(f.uploaded_at).toLocaleDateString();
@@ -490,7 +520,7 @@ async function deleteProject(id) {
 async function editProject(id, currentName) {
     const newName = prompt("Enter new project name:", currentName);
     if (!newName || newName === currentName) return;
-    
+
     const fd = new FormData();
     fd.append("name", newName);
     await apiCall(`/admin/projects/${id}`, { method: 'PUT', body: fd });
@@ -507,7 +537,7 @@ async function deleteUser(id) {
 async function toggleUserRole(id, currentRole) {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
     if (!confirm(`Change user role to ${newRole.toUpperCase()}?`)) return;
-    
+
     const fd = new FormData();
     fd.append("role", newRole);
     await apiCall(`/admin/users/${id}/role`, { method: 'PUT', body: fd });
@@ -524,13 +554,13 @@ async function deleteDocument(id) {
 function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    
+
     sidebar.classList.toggle('open');
     overlay.classList.toggle('active');
 }
 
 const originalSwitchTab = switchTab;
-switchTab = function(tabId) {
+switchTab = function (tabId) {
     originalSwitchTab(tabId);
     if (window.innerWidth <= 768) {
         document.querySelector('.sidebar').classList.remove('open');
@@ -584,7 +614,7 @@ function setVoiceState(state, text) {
     if (state === 'listening') statusText.innerText = "Listening...";
     if (state === 'thinking') statusText.innerText = "Thinking...";
     if (state === 'speaking') statusText.innerText = "Speaking...";
-    
+
     if (text) transcriptText.innerText = text;
 }
 
@@ -592,7 +622,7 @@ function startListening() {
     if (!isVoiceModeActive) return;
     synth.cancel();
     setVoiceState('listening', "I'm listening...");
-    
+
     try {
         recognition.start();
     } catch (e) { console.log("Recognition already started"); }
@@ -614,9 +644,9 @@ recognition.onresult = (event) => {
 
 recognition.onend = () => {
     if (!isVoiceModeActive) return;
-    
+
     const finalQuestion = document.getElementById('voice-transcript').innerText;
-    
+
     if (finalQuestion === "I'm listening..." || finalQuestion.trim() === "") {
         startListening();
         return;
@@ -627,7 +657,7 @@ recognition.onend = () => {
 
 async function processVoiceQuery(question) {
     setVoiceState('thinking', question);
-    
+
     const projectId = document.getElementById('project-selector').value;
     if (!projectId) {
         speakResponse("Please select a project first.");
@@ -647,10 +677,10 @@ async function processVoiceQuery(question) {
         });
 
         const data = await res.json();
-        
+
         appendMessage('user', question);
         appendMessage('ai', data.answer);
-        
+
         speakResponse(data.answer);
 
     } catch (error) {
@@ -660,28 +690,28 @@ async function processVoiceQuery(question) {
 
 function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
-    
+
     const safeText = markdownText ? markdownText.toString() : "";
-    
+
     const formatRegex = new RegExp('[*#_`~]', 'g');
     const citeRegex = new RegExp('\\', 'g');
-    
+
     const cleanText = safeText.replace(formatRegex, '').replace(citeRegex, '');
-    
+
     setVoiceState('speaking', cleanText);
-    
+
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    
+
     const voices = synth.getVoices();
     const googleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
     if (googleVoice) utterance.voice = googleVoice;
-    
-    utterance.rate = 1.05; 
-    
+
+    utterance.rate = 1.05;
+
     utterance.onend = () => {
         if (isVoiceModeActive) startListening();
     };
-    
+
     synth.speak(utterance);
 }
 

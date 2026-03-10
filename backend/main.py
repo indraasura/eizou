@@ -215,41 +215,60 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
         ext = file.filename.split('.')[-1].lower()
         file_path = f"project_{project_id}/{file.filename}"
         
+        # 1. --- UPLOAD TO SUPABASE STORAGE ---
+        # We initialize file_url as None to prevent errors if upload fails
+        file_url = "#" 
+        
         try:
-            # 1. --- UPLOAD TO SUPABASE STORAGE ---
             supabase.storage.from_("project_files").upload(file_path, contents, file_options={"upsert": "true"})
             file_url = supabase.storage.from_("project_files").get_public_url(file_path)
             
+            # Save reference in the relational table
             supabase.table("project_files").insert({
                 "project_id": project_id,
                 "file_name": file.filename,
                 "file_url": file_url
             }).execute()
         except Exception as e:
-            print(f"Failed to store physical file {file.filename}: {str(e)}")
+            print(f"⚠️ Storage Error for {file.filename}: {str(e)}")
+            # Even if relational insert fails, we can proceed if storage worked
 
         # 2. --- PARSE TEXT FOR THE AI ---
-        if ext in ['xlsx', 'xls']:
-            raw_text = pd.read_excel(io.BytesIO(contents)).to_markdown()
-        elif ext == 'csv':
-            raw_text = pd.read_csv(io.BytesIO(contents)).to_markdown()
-        elif ext in ['pptx', 'ppt']:
-            prs = Presentation(io.BytesIO(contents))
-            raw_text = "\n".join([shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text")])
-        elif ext == 'pdf':
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(contents))
-            raw_text = "\n".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
-        else:
-            raw_text = contents.decode('utf-8', errors='ignore')
-            
-        if raw_text:
-            documents.append(Document(page_content=raw_text, metadata={"source": file.filename, "project_id": project_id}))
+        raw_text = ""
+        try:
+            if ext in ['xlsx', 'xls']:
+                raw_text = pd.read_excel(io.BytesIO(contents)).to_markdown()
+            elif ext == 'csv':
+                raw_text = pd.read_csv(io.BytesIO(contents)).to_markdown()
+            elif ext in ['pptx', 'ppt']:
+                prs = Presentation(io.BytesIO(contents))
+                raw_text = "\n".join([shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text")])
+            elif ext == 'pdf':
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(contents))
+                raw_text = "\n".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
+            else:
+                raw_text = contents.decode('utf-8', errors='ignore')
+        except Exception as e:
+            print(f"⚠️ Parsing Error for {file.filename}: {str(e)}")
+
+        # 3. --- CREATE DOCUMENT WITH FULL METADATA ---
+        if raw_text.strip():
+            # Crucial: We attach the file_url here so it persists through chunking
+            documents.append(Document(
+                page_content=raw_text, 
+                metadata={
+                    "source": file.filename, 
+                    "project_id": project_id, 
+                    "file_url": file_url
+                }
+            ))
             
     if not documents:
-        raise HTTPException(status_code=400, detail="No readable text found.")
+        raise HTTPException(status_code=400, detail="No readable text found in the uploaded files.")
 
-    # 3. --- VECTORIZE AND SAVE TO AI MEMORY ---
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    # 4. --- CHUNKING & VECTORIZATION ---
+    # Using smaller chunks (2000) is often better for pinpointing specific sources
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
     chunks = text_splitter.split_documents(documents)
     
     # --- DYNAMIC EMBEDDING ROUTING ---
@@ -262,22 +281,15 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
     else:
         bedrock_client = boto3.client(
             service_name="bedrock-runtime",
-            region_name=os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+            region_name=os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         )
-        # Using AWS Titan Embeddings
-        embeddings = BedrockEmbeddings(
-            client=bedrock_client,
-            model_id="amazon.titan-embed-text-v2:0"
-        )
+        embeddings = BedrockEmbeddings(client=bedrock_client, model_id="amazon.titan-embed-text-v2:0")
         
     try:
         texts = [chunk.page_content for chunk in chunks]
-        metadatas = [chunk.metadata for chunk in chunks]
+        metadatas = [chunk.metadata for chunk in chunks] # Now contains 'file_url'
         
         raw_vectors = embeddings.embed_documents(texts)
-        
         truncated_vectors = [vec[:1024] for vec in raw_vectors]
         
         records = []
@@ -288,13 +300,14 @@ async def upload_files(files: list[UploadFile] = File(...), project_id: int = Fo
                 "embedding": vec
             })
             
+        # Bulk insert into Supabase Vector table
         supabase.table("project_documents").insert(records).execute()
         
     except Exception as e:
-        print(f"Vector upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload to vector database: {str(e)}")
+        print(f"❌ Vector DB Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync with AI memory: {str(e)}")
     
-    return {"status": "success", "message": f"Files and AI Data permanently saved to Project {project_id}."}
+    return {"status": "success", "message": f"Knowledge base synced. {len(files)} files processed."}
 
 def format_docs(docs): return "\n\n".join(doc.page_content for doc in docs)
 
@@ -303,41 +316,22 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
     
     # --- DYNAMIC MODEL ROUTING ---
     if "gemini" in model.lower():
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=os.getenv("GOOGLE_API_KEY"), transport="rest")
+        embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", google_api_key=os.getenv("GOOGLE_API_KEY"), transport="rest")
         llm = ChatGoogleGenerativeAI(model=model, google_api_key=os.getenv("GOOGLE_API_KEY"), temperature=0, transport="rest")
     else:
-        # AWS Bedrock Setup
         bedrock_client = boto3.client(
             service_name="bedrock-runtime",
             region_name=os.getenv("AWS_DEFAULT_REGION", "ap-south-1"),
             aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
         )
-        
-        # Vector Embeddings (Keeping Titan for mathematical search)
-        embeddings = BedrockEmbeddings(
-            client=bedrock_client,
-            model_id="amazon.titan-embed-text-v2:0"
-        )
-        
-        # Using your team's Custom OSS Model via the Converse API
-        reasoning_effort = "medium"  # Can be "low", "medium", or "high"
-        
-        llm = ChatBedrockConverse(
-            client=bedrock_client,
-            model_id="openai.gpt-oss-20b-1:0", 
-            temperature=0,
-            # additional_model_request_fields={
-            #    "reasoning_effort": reasoning_effort
-            #}
-        )
+        embeddings = BedrockEmbeddings(client=bedrock_client, model_id="amazon.titan-embed-text-v2:0")
+        llm = ChatBedrockConverse(client=bedrock_client, model_id="openai.gpt-oss-20b-1:0", temperature=0)
     
     # --- RAG RETRIEVAL ---
     try:
         query_embedding = embeddings.embed_query(message)
-        
-        # Truncate to match your DB size
-        query_embedding = query_embedding[:1024]
+        query_embedding = query_embedding[:1024] # Ensure Titan/Gemini compatibility
         
         rpc_response = supabase.rpc(
             "match_project_documents",
@@ -348,23 +342,30 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
             }
         ).execute()
         
-        chunks = rpc_response.data
-        context_text = "\n\n".join([row["content"] for row in chunks])
-        if not context_text.strip():
-            context_text = "No relevant context found."
+        chunks = rpc_response.data or []
+        context_text = ""
+        potential_sources = {} # Maps 'Filename' -> 'Public URL'
+
+        for row in chunks:
+            meta = row.get("metadata", {})
+            name = meta.get("source", "Unknown Document")
+            url = meta.get("file_url", "#")
+            content = row.get("content", "")
+            
+            # Formatting context so the LLM clearly sees which text belongs to which file
+            context_text += f"\n---\nDOCUMENT: {name}\nCONTENT: {content}\n"
+            potential_sources[name] = url
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to search database: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database retrieval failed: {str(e)}")
     
     # --- AI GENERATION ---
     system_prompt = (
-        "You are an enterprise data assistant. Answer based on the context. "
-        "CHART INSTRUCTIONS: If the user asks for a graph or chart, you MUST output a valid JSON object "
-        "wrapped in a ```chart ... ``` block. "
-        "The JSON MUST follow this exact structure: "
-        "{{ \"type\": \"bar\", \"data\": {{ \"labels\": [\"A\", \"B\"], \"datasets\": [{{ \"label\": \"Title\", \"data\": [10, 20], \"backgroundColor\": \"#0A56D0\" }}] }}, \"options\": {{ \"responsive\": true }} }} "
-        "Use 'bar', 'line', or 'pie'. Use aesthetic colors. "
-        "If no data is available for a chart, explain why instead of providing an empty block. "
+        "You are an enterprise data assistant. Answer based strictly on the provided context."
+        "If the information is not in the context, say you don't know."
+        "\n\nCHART INSTRUCTIONS: For graphs, output a valid JSON object wrapped in ```chart ... ```."
+        "\n\nCITATION INSTRUCTIONS: At the end of your answer, you MUST list only the document names you actually used."
+        "Format: SOURCES: [File1.pdf, File2.xlsx]"
         "\n\nContext: {context}"
     )
 
@@ -376,10 +377,37 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
     rag_chain = prompt_template | llm | StrOutputParser()
     
     try:
-        answer = rag_chain.invoke({"context": context_text, "input": message})
-        return {"answer": answer}
+        full_response = rag_chain.invoke({"context": context_text, "input": message})
+        
+        # --- CITATION FILTERING LOGIC ---
+        import re
+        cited_sources = []
+        clean_answer = full_response
+        
+        if "SOURCES:" in full_response:
+            # Separate the answer from the citation tag
+            parts = full_response.split("SOURCES:")
+            clean_answer = parts[0].strip()
+            
+            # Extract names inside the brackets
+            raw_sources_match = re.findall(r"\[(.*?)\]", parts[1])
+            if raw_sources_match:
+                # Split by comma and clean up whitespace
+                names_in_citation = [n.strip() for n in raw_sources_match[0].split(",")]
+                
+                for name in names_in_citation:
+                    # Only add if the file actually exists in our retrieval set
+                    if name in potential_sources:
+                        cited_sources.append({
+                            "name": name, 
+                            "url": potential_sources[name]
+                        })
+
+        # Return the clean answer and the verified source objects
+        return {"answer": clean_answer, "sources": cited_sources}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate AI response: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LLM Reasoning failed: {str(e)}")
 
 # --- NEW ADMIN ENDPOINTS (EDIT & DELETE) ---
 
