@@ -239,11 +239,11 @@ function appendMessage(role, text, sources = []) {
     let sourcesHtml = "";
     if (role === 'ai' && sources && sources.length > 0) {
         sourcesHtml = `<div class="sources-container"><div class="source-label">Documents referenced</div>`;
-        
+
         sources.forEach(src => {
             // Check if URL is valid
             const url = (src.url && src.url !== "#") ? src.url : null;
-            
+
             if (url) {
                 sourcesHtml += `
                     <a href="${url}" 
@@ -679,45 +679,84 @@ async function processVoiceQuery(question) {
     fd.append("model", document.getElementById('model-select').value || "gemini-2.5-flash");
 
     try {
-        const res = await fetch(`${API_BASE_URL}/chat`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${localStorage.getItem('nexus_token')}` },
+        // We now use your custom apiCall helper so it automatically attaches the right URL and Auth Token
+        const res = await apiCall('/chat', {
+            method: 'POST',
             body: fd
         });
 
+        if (!res.ok) {
+            throw new Error(`Server error: ${res.status}`);
+        }
+
         const data = await res.json();
 
+        // Render the UI messages (including the source pills!)
         appendMessage('user', question);
-        appendMessage('ai', data.answer);
+        appendMessage('ai', data.answer, data.sources);
 
+        // Speak the clean text out loud
         speakResponse(data.answer);
 
     } catch (error) {
+        console.error("Voice Engine API Error:", error);
         speakResponse("Sorry, I encountered an error checking the database.");
     }
 }
+
+// We attach the utterance to the window object to prevent Chrome from deleting it mid-speech
+window.currentUtterance = null;
+
+// Define these at the top level of your script.js (outside the function)
+window.currentUtterance = null; 
+let typingInterval = null;
 
 function speakResponse(markdownText) {
     if (!isVoiceModeActive) return;
 
     const safeText = markdownText ? markdownText.toString() : "";
 
-    const formatRegex = new RegExp('[*#_`~]', 'g');
-    const citeRegex = new RegExp('\\', 'g');
+    // Clean formatting and citations
+    const formatRegex = /[*#_`~]/g;
+    const citeRegex = /SOURCES:\s*\[.*?\]/g;
+    const cleanText = safeText.replace(formatRegex, '').replace(citeRegex, '').trim();
 
-    const cleanText = safeText.replace(formatRegex, '').replace(citeRegex, '');
-
-    setVoiceState('speaking', cleanText);
+    // Force the state update and explicitly clear the transcript text
+    setVoiceState('speaking', " "); 
+    const transcriptEl = document.getElementById('voice-transcript');
+    transcriptEl.innerText = ""; 
+    
+    // Clear any previous typing animations
+    if (typingInterval) clearInterval(typingInterval);
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
+    window.currentUtterance = utterance;
 
     const voices = synth.getVoices();
     const googleVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
     if (googleVoice) utterance.voice = googleVoice;
 
-    utterance.rate = 1.05;
+    utterance.rate = 0.9;
+
+    let charIndex = 0;
+    typingInterval = setInterval(() => {
+        if (charIndex <= cleanText.length) {
+            transcriptEl.innerText = cleanText.substring(0, charIndex);
+            charIndex++;
+        } else {
+            clearInterval(typingInterval);
+        }
+    }, 40);
 
     utterance.onend = () => {
+        clearInterval(typingInterval);
+        transcriptEl.innerText = cleanText;
+        if (isVoiceModeActive) startListening();
+    };
+
+    utterance.onerror = () => {
+        clearInterval(typingInterval);
+        transcriptEl.innerText = cleanText;
         if (isVoiceModeActive) startListening();
     };
 

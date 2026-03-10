@@ -817,9 +817,12 @@ body {
 #voice-transcript {
     font-size: 1.5rem;
     max-width: 600px;
+    width: 100%;
     min-height: 60px;
     line-height: 1.4;
     font-weight: 400;
+    text-align: left;
+    margin: 0 auto;
 }
 
 /* --- THE SPHERE & ANIMATIONS --- */
