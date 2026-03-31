@@ -1,5 +1,5 @@
-// Change this to your Render URL when deploying nexus-backend-9z4y6wfxv-indraasuras-projects.vercel.app
-const API_URL = "nexus-backend-9z4y6wfxv-indraasuras-projects.vercel.app";
+// Change this to your Render URL when deploying nexus-backend-two.vercel.app
+const API_URL = "nexus-backend-two.vercel.app";
 
 let authToken = null;
 let currentRole = null;
