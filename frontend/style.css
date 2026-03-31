@@ -988,7 +988,7 @@ body {
 }
 
 /* --- MOBILE RESPONSIVENESS --- */
-@media (max-width: 768px) {
+@media (max-width: 2000px) {
     .sidebar {
         position: fixed;
         left: -100%;
@@ -1025,7 +1025,9 @@ body {
     #mobile-menu-btn {
         display: flex !important;
     }
+}
 
+@media (max-width: 768px) {
     .chat-container {
         padding: 16px 16px 120px 16px;
     }
