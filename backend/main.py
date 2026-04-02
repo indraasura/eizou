@@ -374,7 +374,7 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
         return {"answer": clean_answer, "sources": cited_sources}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+'''
 @app.get("/projects/{project_id}/recommendations")
 async def get_recommendations(project_id: int, user: dict = Depends(get_current_user)):
     try:
@@ -422,3 +422,4 @@ async def get_recommendations(project_id: int, user: dict = Depends(get_current_
             "What are the key metrics and data points?", 
             "What insights can you draw from the uploaded documents?"
         ]}
+'''

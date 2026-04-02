@@ -778,6 +778,7 @@ async function clearChat() {
     }
 
     // 1. Show the loading state
+    /*
     chatContainer.innerHTML = `
         <div class="welcome-screen">
             <img src="./images/nexus_logo.gif" alt="Nexus" style="width: 72px; border-radius: 50%;">
@@ -829,5 +830,6 @@ function askRecommendedQuestion(questionText) {
     document.getElementById('chat-container').innerHTML = '';
     sendChat();
 }
+*/
 
 document.addEventListener('DOMContentLoaded', initializeNexusDropdowns);
