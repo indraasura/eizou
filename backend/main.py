@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import pandas as pd
@@ -385,73 +386,167 @@ async def chat(message: str = Form(...), project_id: int = Form(...), model: str
         raise HTTPException(status_code=500, detail=str(e))
     
 
-# Gitbook webhook
-@app.post("/webhooks/gitbook")
-async def gitbook_sync(request: Request):
+# Gitbook iframe embed
+@app.get("/embed", response_class=HTMLResponse)
+async def embed_widget(project_id: int = 999):
     """
-    Receives real-time updates from GitBook. 
-    Point your GitBook Webhook URL to: https://nexus-backend-two.vercel.app/webhooks/gitbook
+    Serves a standalone, full-frame chat UI for embedding in GitBook or other platforms.
+    Usage: https://your-domain.com/embed?project_id=999
     """
-    try:
-        payload = await request.json()
-        
-        # Extract payload based on GitBook's webhook schema
-        action = payload.get("action") 
-        page_id = payload.get("page", {}).get("id")
-        title = payload.get("page", {}).get("title", "Untitled")
-        markdown_content = payload.get("page", {}).get("markdown", "")
-        page_url = payload.get("page", {}).get("urls", {}).get("public", "")
-        
-        GITBOOK_PROJECT_ID = 999 
-        
-        # 1. Purge old memory if the page was edited or deleted
-        if action in ["page.updated", "page.deleted"]:
-            supabase.table("project_documents") \
-                .delete() \
-                .eq("metadata->>source", page_id) \
-                .execute()
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Ask Nexus</title>
+        <style>
+            body { 
+                margin: 0; 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+                display: flex; flex-direction: column; height: 100vh; 
+                background: #FFFFFF; overflow: hidden;
+            }
+            #header { 
+                background: #0A56D0; color: white; padding: 14px 20px; 
+                font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 10;
+            }
+            #chat { 
+                flex: 1; overflow-y: auto; padding: 20px; background: #F8F9FA; 
+                display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth;
+            }
+            .msg { 
+                padding: 12px 16px; border-radius: 16px; max-width: 90%; 
+                font-size: 14.5px; line-height: 1.5; word-wrap: break-word; 
+            }
+            .msg.bot { 
+                background: white; border: 1px solid #E3E3E3; align-self: flex-start; 
+                color: #1F1F1F; border-bottom-left-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            }
+            .msg.user { 
+                background: #0A56D0; color: white; align-self: flex-end; 
+                border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(10,86,208,0.2);
+            }
+            .sources { 
+                margin-top: 12px; padding-top: 12px; border-top: 1px solid #E3E3E3; font-size: 12px; 
+            }
+            .source-link { 
+                color: #0A56D0; text-decoration: none; font-weight: 500; display: block; margin-top: 6px; 
+            }
+            .source-link:hover { text-decoration: underline; }
+            #input-area { 
+                padding: 16px; background: white; border-top: 1px solid #E3E3E3; 
+                display: flex; gap: 12px; align-items: center;
+            }
+            #input { 
+                flex: 1; padding: 12px 16px; border: 1px solid #E3E3E3; border-radius: 24px; 
+                outline: none; font-size: 14.5px; transition: border 0.2s; 
+            }
+            #input:focus { border-color: #0A56D0; }
+            #send { 
+                background: #0A56D0; color: white; border: none; border-radius: 50%; 
+                width: 44px; height: 44px; cursor: pointer; display: flex; align-items: center; 
+                justify-content: center; transition: background 0.2s; flex-shrink: 0;
+            }
+            #send:hover { background: #0842A0; }
+            #send:disabled { background: #A8C7FA; cursor: not-allowed; }
+            .loading { display: flex; gap: 4px; padding: 4px 8px; }
+            .dot { width: 6px; height: 6px; background: #0A56D0; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+            .dot:nth-child(1) { animation-delay: -0.32s; }
+            .dot:nth-child(2) { animation-delay: -0.16s; }
+            @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        </style>
+    </head>
+    <body>
+        <div id="header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Ask Nexus AI
+        </div>
+        <div id="chat">
+            <div class="msg bot">Hello! I am trained on this documentation. What are you looking for?</div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="input" placeholder="Ask a question..." autocomplete="off" />
+            <button id="send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </div>
+        <script>
+            const PROJECT_ID = __PROJECT_ID__;
+            const chat = document.getElementById('chat');
+            const input = document.getElementById('input');
+            const sendBtn = document.getElementById('send');
+
+            function appendMsg(text, sender, sources = []) {
+                const msg = document.createElement('div');
+                msg.className = 'msg ' + sender;
                 
-            if action == "page.deleted":
-                return {"status": "success", "message": f"Memory purged for deleted page: {title}"}
-        
-        # 2. Vectorize the new content directly into memory (No File Storage)
-        if action in ["page.created", "page.updated"] and markdown_content.strip():
-            doc = Document(
-                page_content=markdown_content,
-                metadata={
-                    "source": page_id,          
-                    "title": title,            
-                    "project_id": GITBOOK_PROJECT_ID, 
-                    "file_url": page_url        # Links directly back to GitBook
+                let formattedText = text.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+                
+                let sourceHtml = '';
+                if (sources && sources.length > 0) {
+                    sourceHtml = '<div class="sources"><strong>Documents Referenced:</strong>';
+                    sources.forEach(src => {
+                        let url = (src.url && src.url !== "#") ? src.url : "javascript:void(0)";
+                        let style = (url === "javascript:void(0)") ? "style='color:#666;text-decoration:none;cursor:default;'" : "";
+                        sourceHtml += `<a href="${url}" target="_blank" class="source-link" ${style}>↳ ${src.name}</a>`;
+                    });
+                    sourceHtml += '</div>';
                 }
-            )
-            
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
-            chunks = text_splitter.split_documents([doc])
-            
-            embeddings = GoogleGenerativeAIEmbeddings(
-                model="gemini-embedding-001", 
-                google_api_key=os.getenv("GOOGLE_API_KEY"), 
-                transport="rest"
-            )
-            
-            texts = [chunk.page_content for chunk in chunks]
-            metadatas = [chunk.metadata for chunk in chunks]
-            
-            raw_vectors = embeddings.embed_documents(texts)
-            truncated_vectors = [vec[:1024] for vec in raw_vectors]
-            
-            records = [
-                {"content": t, "metadata": m, "embedding": v} 
-                for t, m, v in zip(texts, metadatas, truncated_vectors)
-            ]
-                
-            supabase.table("project_documents").insert(records).execute()
-            
-            return {"status": "success", "message": f"Successfully synced page: {title}"}
 
-        return {"status": "ignored", "message": "Unhandled action or empty content."}
+                msg.innerHTML = formattedText + sourceHtml;
+                chat.appendChild(msg);
+                chat.scrollTop = chat.scrollHeight;
+            }
 
-    except Exception as e:
-        print(f"GitBook Webhook Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+            async function handleSend() {
+                const text = input.value.trim();
+                if (!text) return;
+
+                appendMsg(text, 'user');
+                input.value = '';
+                sendBtn.disabled = true;
+
+                const loader = document.createElement('div');
+                loader.className = 'msg bot';
+                loader.innerHTML = '<div class="loading"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+                chat.appendChild(loader);
+                chat.scrollTop = chat.scrollHeight;
+
+                const formData = new FormData();
+                formData.append("message", text);
+                formData.append("project_id", PROJECT_ID);
+                formData.append("model", "gemini-2.5-flash");
+
+                try {
+                    const res = await fetch('/chat', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    
+                    chat.removeChild(loader);
+
+                    if (res.ok) {
+                        appendMsg(data.answer, 'bot', data.sources);
+                    } else {
+                        appendMsg('⚠️ Error: ' + (data.detail || 'Failed to analyze data.'), 'bot');
+                    }
+                } catch (e) {
+                    chat.removeChild(loader);
+                    appendMsg('❌ Network error. Check server connection.', 'bot');
+                } finally {
+                    sendBtn.disabled = false;
+                    input.focus();
+                }
+            }
+
+            sendBtn.addEventListener('click', handleSend);
+            input.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSend(); });
+        </script>
+    </body>
+    </html>
+    """
+    
+    # Safely inject the project ID without f-string escaping nightmares
+    final_html = html_template.replace("__PROJECT_ID__", str(project_id))
+    return final_html
+
